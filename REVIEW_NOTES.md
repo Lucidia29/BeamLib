@@ -1,49 +1,296 @@
-# BeamLib Review Notes
+# BeamLib Planning Review
 
-These notes capture the review changes that must be reflected in `CODEX_TASKS.md` before implementation continues.
+Reviewer role: numerical methods reviewer and engineering software architect.
 
-## Required Fixes
+Reviewed documents:
+- `PROJECT_SPEC.md`
+- `EXECUTION_PLAN.md`
+- `REVIEW_NOTES.md`
 
-1. GE3D cantilever acceptance must not use a pure Euler-Bernoulli small-deflection baseline.
-   - The current GE3D formulation includes shear strain, so the benchmark in Batch 2 should be aligned with the existing golden reference (`sanity_cantilever_ref.csv`) or explicitly stated as a Timoshenko-type small-deflection baseline.
-   - Do not keep the current EB-only values as the verification target.
+## Main Findings
 
-2. Linear EB element residual sign must match the solver convention.
-   - `BeamSolver` uses `R_int - F_ext`.
-   - Therefore the linear EB elements in Batch 4 and Batch 5 should use `re = K * dispVec`, not `re = -K * dispVec`.
+1. `EXECUTION_PLAN.md` Batch 2 is too large and high-risk.
 
-3. 2D and 3D transformation handling must be separated clearly.
-   - The current `BeamModel` transformation sketch is safe for 3D GE3D, but not a general 2D solution.
-   - Batch 4 needs a dedicated 2D x-z transformation path, and a non-axial / rotated beam test.
-   - Keep 3D transformation in `GeomExact3D::computeTransformation`.
+   EB2D currently establishes `DofMap`, `BeamModel`, sparse assembly, NR, mass matrix, reactions, internal force post-processing, distributed-load tests, and rotated-beam tests in one batch. This is the core architecture layer. Split it into:
+   - `Batch 2A`: EB2D + DofMap + BeamModel + linear/NR static solve
+   - `Batch 2B`: mass assembly + reactions + internal forces + distributed-load equivalent nodal loads
 
-4. Batch 3 large-deformation verification should be framed as a reference-based or stress-style test.
-   - The current `F_z = 5e5` / `~0.5L` setup is too assumption-heavy for first-pass acceptance.
-   - Use the MATLAB / reference C++ benchmark, or downgrade this case to a stress test with qualitative checks.
+   Otherwise debugging will not clearly isolate whether failures come from the element, assembly, constraints, post-processing, or load equivalencing.
 
-5. The explicit integrator should be scoped to GE3D first.
-   - The lumped-mass rule in Batch 3 is 6DOF GE3D-specific.
-   - Keep the first version as `ExplicitCentralDifference<GeomExact3D>` and extend later if EB elements need mass support.
+2. `EXECUTION_PLAN.md` Batch 6 GE3D small-load benchmark is still ambiguous.
 
-6. Batch 1 should not rely on an empty static library source list unless the CMake behavior is explicitly known.
-   - Prefer an `INTERFACE` target for the first batch, or a clearly documented placeholder `.cpp`.
+   It states `u_z ≈ FL^3/(3EI) (Timoshenko analytical solution, including shear correction)`, but `FL^3/(3EI)` is the Euler-Bernoulli bending term only. Write the complete expression explicitly:
+   `u_z = FL^3/(3EI) + FL/(kappa GA)`, with sign set by load direction.
 
-7. Batch 2 should include element-level tests, not only an end-to-end cantilever.
-   - Add zero-displacement, pure axial, and pure torsion checks to isolate element, assembly, and solver issues.
+3. `EXECUTION_PLAN.md` Batch 2 uses a distributed-load test before the distributed-load API exists.
 
-8. The meaning of “1 NR iteration” must be explicit.
-   - For linear problems, define this as one correction step after the initial residual evaluation.
-   - Keep the wording consistent between Batch 4 and Batch 5.
+   The simply supported beam test with uniform load needs equivalent nodal loads. The plan must state whether Batch 2 manually assembles consistent equivalent nodal loads in the test, or introduces a minimal helper such as `equivalentNodalLoadUniform2D()`. Do not make Batch 2 depend on Batch 10 `LoadManager`.
 
-9. `LoadManager` needs a complete prescribed-displacement contract.
-   - Define whether `addPrescribedDisplacement` also writes the displacement value into the node state.
-   - Define whether it must be called before `buildDofMap()` or whether rebuilding is required afterward.
+4. `EXECUTION_PLAN.md` Batch 2 rotated-beam test needs a more rigorous acceptance definition.
 
-10. Git workflow should include a baseline commit.
-    - Create the baseline commit first.
-    - Then work on `feat/batch-*` branches.
-    - Keep review notes and plan updates in git so Claude Code can read them directly.
+   "Consistent with the horizontal beam projection" is not physically precise. A global vertical force on a 45-degree beam decomposes into local axial and transverse components. Use two tests:
+   - Apply a local transverse force transformed into global coordinates; transform displacement back to local coordinates and compare with the horizontal beam.
+   - Apply a global force and explicitly verify the expected local axial/transverse coupling.
 
-## Recommendation
+5. Timoshenko shear locking is flagged, but the locking-free scheme is not decided.
 
-Update `CODEX_TASKS.md` to incorporate these fixes before starting the next Codex batch.
+   For a teaching-oriented Phase 1 library, use the 2-node locking-free closed-form Timoshenko stiffness with the `Phi = 12EI/(kappa GA L^2)` correction as the default. It is simple, teachable, and has a clear EB limit. Do not use EAS in the first version. Selective reduced integration can be documented as a comparison, but it requires more care around low-order element modes.
+
+6. GE3D one-point Gauss quadrature is acceptable for migration, but not generally sufficient as a claim.
+
+   Keep 1-point Gauss in Phase 1 to preserve the existing validated C++ behavior. Add a note that multi-point integration should be evaluated later for strong curvature, distributed loading, or shear/torsion coupling cases. Do not mix algorithm migration with quadrature changes in the same batch.
+
+7. The global `< 1e-10` relative tolerance for all linear benchmarks is too aggressive.
+
+   Use different tolerances by test type:
+   - Single-element matrix checks and patch tests: `1e-12` to `1e-10`
+   - Multi-element analytical displacement checks: `1e-9` or `1e-8`
+   - Reactions and near-zero DOFs: absolute tolerance, not relative tolerance
+
+8. `computeMass` is required by dynamics and modal analysis, but the mass strategy is not fixed.
+
+   EB consistent mass is clear. Timoshenko mass must decide whether rotary inertia and shear-related inertia are included. GE3D must decide consistent vs lumped mass. These choices affect Batch 8 and Batch 9 and should be decided before implementation reaches dynamics/modal analysis.
+
+9. Prescribed displacement handling is too late in the plan.
+
+   Constraint handling is part of core assembly and solving, not final integration. Homogeneous Dirichlet constraints can be enough for Batch 2A, but if nonzero prescribed displacement is in Phase 1 scope, elimination plus RHS correction must be designed early.
+
+10. Dense modal analysis is acceptable for Phase 1, but the plan needs guardrails.
+
+    `Eigen::GeneralizedSelfAdjointEigenSolver` is fine for educational and moderate models, but implementation must:
+    - assemble free-DOF dense `Kff` and `Mff`
+    - ensure `Mff` is symmetric positive definite
+    - handle insufficient constraints and rigid-body modes
+    - document that large sparse modal analysis is out of Phase 1 scope
+
+## Numerical Methods Correctness
+
+The 6-element scope is reasonable:
+- EB for slender beams
+- Timoshenko for shear-deformable beams
+- GE for large deformation and large rotation
+
+The missing piece is a clearer applicability boundary for each theory:
+- whether Timoshenko includes rotary inertia
+- whether GE is explicitly a shear-deformable Reissner-Simo beam
+- whether EB fully excludes shear effects in all static and dynamic checks
+
+Batch 2 EB2D stiffness indexing is correct for `[u_x, u_z, theta_y]`. The bending sub-block uses local DOFs `[1, 2, 4, 5]`, which is standard if the positive `theta_y` convention is consistently defined.
+
+Batch 3 EB3D mapping is also correct:
+- xy-plane bending uses `u_y/theta_z`, DOFs `[1, 5, 7, 11]`, stiffness `EIz`
+- xz-plane bending uses `u_z/theta_y`, DOFs `[2, 4, 8, 10]`, stiffness `EIy`
+
+The most likely sign bug is `theta_y` under `F_z`. Add a one-element `F_z` test that directly checks the sign of `theta_y`.
+
+Residual convention is internally consistent:
+- linear element residual: `re = ke * dispVec`
+- Newton residual: `R_int - F_ext = 0`
+- correction equation: `K delta = -R`
+
+Newmark defaults are correct:
+- `beta = 0.25`
+- `gamma = 0.5`
+- average acceleration method
+- unconditionally stable for linear problems
+- second-order accurate
+- no numerical damping
+
+Add the standard stability condition:
+`gamma >= 0.5` and `beta >= 0.25 * (gamma + 0.5)^2`.
+
+For Generalized-alpha, explicitly use the Chung-Hulbert structural dynamics formulas:
+- `alpha_m = (2*rho_inf - 1)/(rho_inf + 1)`
+- `alpha_f = rho_inf/(rho_inf + 1)`
+- `gamma = 0.5 + alpha_f - alpha_m`
+- `beta = 0.25 * (1 + alpha_f - alpha_m)^2`
+
+## Verification Scheme
+
+The analytical benchmark plan is directionally good, but should add:
+- EB2D/EB3D pure end-moment tests
+- Timoshenko coarse-mesh slender-beam locking tests
+- mandatory GE3D quantitative large-deformation benchmark
+- modal orthogonality checks such as `Phi^T M Phi = I`
+
+GE3D large deformation should not remain qualitative. Make one benchmark mandatory, preferably:
+- Bathe & Bolourchi 45-degree bend, or
+- a Simo-Reissner cantilever roll-up benchmark
+
+The cross-validation matrix is valuable:
+- GE small load -> Timoshenko
+- Timoshenko slender limit -> EB
+- 2D results -> corresponding 3D in-plane results
+
+Add an explicit mapping table for section properties in 2D vs 3D checks, especially `Iy`/`Iz` under in-plane bending.
+
+## Architecture and API Design
+
+The template core plus type-erased API boundary is a sound design for future GUI and Python bindings.
+
+Keep numerical tests on `BeamModel<ElemType>` directly. Use `IAnalysisModel` only as the higher-level runtime API layer, so virtual dispatch does not hide numerical errors.
+
+`if constexpr (ElemType::hasTransformation)` is acceptable for the first implementation. As element types grow, consider moving transformation details into element traits:
+- local DOF transformation
+- global result transformation
+- local coordinate construction
+
+The current plan should avoid embedding 2D/3D coordinate conversion policy directly in `BeamModel`.
+
+`ElementInternalForces` as an element static method is acceptable for Phase 1, but public post-processing should be decoupled through a PostProcess layer. Internal force extraction involves sampling, smoothing, end values, and diagram conventions; these are post-processing policy rather than core element residual/stiffness behavior.
+
+Prescribed displacement should use elimination plus RHS correction in Phase 1. Do not introduce Lagrange multipliers or penalty methods in the first version.
+
+## Execution Plan Structure
+
+Recommended change:
+- Split Batch 2 into Batch 2A and Batch 2B.
+- Move nonzero prescribed displacement handling earlier if it remains in Phase 1 scope.
+- Batch 8 and Batch 9 can be started after EB/Timoshenko mass matrices are stable; they do not need to wait for GE2D.
+
+The overall ordering is good:
+EB2D -> EB3D -> Timo2D -> Timo3D -> GE3D -> GE2D -> dynamics/modal -> integration.
+
+For GE2D, choose an independent 2D derivation. A scalar `theta_y` and 2D rotation matrix are clearer for teaching and easier to debug. Use GE3D in-plane results only for cross-validation, not as the implementation path.
+
+The 15-23 day estimate is optimistic. With theory PDFs, 6 elements, implicit dynamics, modal analysis, post-processing, API wrapping, and review iteration, 4-6 weeks is more realistic.
+
+## Documentation Plan
+
+The theory document outline is mostly complete. Add three required items to every theory chapter:
+- sign convention table
+- formula-to-C++ index mapping table
+- verification tolerance table
+
+For first-release teaching tutorials, prioritize:
+1. EB2D cantilever / simply supported beam
+2. 2D portal frame under lateral load
+3. Timoshenko deep beam vs EB slender beam
+4. EB3D or Timoshenko3D mechanical arm end stiffness
+
+Large deformation and modal tutorials should come after the core linear workflows are stable.
+
+## Opinions on Open Questions
+
+1. Timoshenko locking-free scheme
+
+   Use the Phi-corrected 2-node Timoshenko closed-form stiffness as the Phase 1 default. It is simple, robust, and teachable. Do not use EAS in Phase 1.
+
+2. GE2D implementation path
+
+   Use an independent 2D derivation. Keep scalar rotation and 2D kinematics clear. Use GE3D only for cross-validation.
+
+3. Dense eigenvalue solver for modal analysis
+
+   Accept dense `GeneralizedSelfAdjointEigenSolver` in Phase 1. Restrict this to educational/moderate-size models and document the limitation. Assemble only the free-DOF `Kff` and `Mff` matrices.
+
+4. Prescribed displacement method
+
+   Use elimination plus RHS correction. Do not add Lagrange multiplier or penalty methods in Phase 1.
+
+5. Distributed load API
+
+   Batch 2 tests may manually assemble equivalent nodal loads. In the public API, add `addUniformDistributedLoad(elemId, direction, q, CoordinateSystem::Local/Global)` later, with explicit local/global direction semantics.
+
+## Additional Risks
+
+- `SectionProperties` likely needs separate `kappa_y` and `kappa_z` for 3D Timoshenko beams.
+- 3D frame analysis needs user-defined section orientation, not only an automatic reference vector.
+- `SparseLU` must report singular factorization cleanly for mechanisms or under-constrained models.
+- Reaction recovery requires either full-system reassembly or tracking fixed-DOF internal force contributions during assembly.
+- GUI/Python boundaries need structured solver status and errors, even if the numerical kernel avoids excessive error handling.
+
+## Overall Judgment
+
+The v2 scope and direction are much stronger than v1. The main changes needed before implementation are:
+- split Batch 2
+- choose the Timoshenko locking-free scheme
+- fix the GE3D small-load formula wording
+- move prescribed displacement design earlier
+- make one GE3D large-deformation quantitative benchmark mandatory
+
+## Codex Review Round 2 — v3 Follow-up
+
+### Status
+
+`PROJECT_SPEC.md` v3 and `EXECUTION_PLAN.md` v3 have absorbed the main Round 1 findings. The plan is now suitable as a basis for Batch 1 and Batch 2A implementation.
+
+### Resolved Round 1 Items
+
+- Batch 2 was split into `Batch 2A` and `Batch 2B`.
+- GE3D small-load benchmark now uses the complete Timoshenko expression.
+- Timoshenko locking-free scheme is fixed as Phi-corrected closed-form stiffness.
+- 2D/3D coordinate transformation and `refVector` handling are separated.
+- Test tolerances are now tiered by test type.
+- GE3D large-deformation benchmark is mandatory.
+- Modal dense solver limitations and guardrails are documented.
+
+### Remaining Issues
+
+1. GE3D mass matrix strategy is still over-claimed.
+
+   `PROJECT_SPEC.md` states GE3D uses a consistent mass matrix "consistent with existing C++ code", but the known reference C++ implementation used lumped mass for explicit dynamics. Update this to say:
+   - GE3D Phase 1 mass strategy must be confirmed in the theory document.
+   - If migrating the existing explicit-dynamics behavior, the mass is lumped.
+   - If GE3D is used for implicit dynamics or modal analysis, consistent mass requires a separate derivation and verification.
+
+2. Local coordinate convention needs an explicit GE3D invariance test.
+
+   `EXECUTION_PLAN.md` uses `xA_local=(0,0,0)` and `xB_local=(L,0,0)` for transformed elements. This is fine for EB/Timo and likely fine for GE3D, but the reference C++ code used `lambda*xA` and `lambda*xB`. Add a GE3D test with non-origin, non-axis-aligned coordinates to verify that local-origin shifting does not change residual/stiffness or solution.
+
+3. Nonzero prescribed displacement should have a hard implementation checkpoint.
+
+   `PROJECT_SPEC.md` says nonzero prescribed displacement must be designed before Batch 4, while `EXECUTION_PLAN.md` still allows it to be deferred. Make the plan explicit:
+   - Batch 2B completes the elimination + RHS correction design.
+   - Implementation and test must be completed before Batch 4 starts.
+
+4. EB2D internal force formula should not be half-specified in prose.
+
+   The current compressed expression for `M_y` in Batch 2B is likely to cause sign or endpoint coefficient mistakes. Replace it with:
+   - Compute internal forces from the Hermite curvature `B` matrix at element ends.
+   - Put the full endpoint force/moment formulas in the EB2D theory document.
+   - Code must follow the theory document formula-to-index table.
+
+5. Bathe & Bolourchi benchmark is mandatory but not executable yet.
+
+   The plan names the benchmark but does not provide geometry, material, load, discretization, target values, or source table. Add enough data to make it a closed acceptance test, or explicitly add a pre-Batch-6 task to extract and document the benchmark values.
+
+6. `AGENTS.md` says "10-batch", but the plan now has `Batch 2A` and `Batch 2B`.
+
+   Change the wording to "分阶段执行总计划" or similar, instead of a fixed batch count.
+
+### Recommendation
+
+Make these small corrections before starting implementation beyond Batch 1. Batch 1 and Batch 2A can proceed after the GE3D mass wording and `AGENTS.md` wording are corrected, because the other remaining items mainly affect later batches.
+
+## Codex Review Round 3
+
+### Status
+
+`PROJECT_SPEC.md` and `EXECUTION_PLAN.md` have improved enough to start Batch 1 and Batch 2A, but a few inconsistencies still need to be tightened before later batches.
+
+### Remaining Issues
+
+1. `EXECUTION_PLAN.md` Batch 2B reaction recovery should use `R_int - F_ext`, not just `R_int`.
+
+   The execution plan currently says to take the fixed-DOF `R_int` component. That is only correct when no external load is applied at the constrained DOF. Align the plan with `PROJECT_SPEC.md` and define support reactions as the residual at constrained DOFs.
+
+2. `PROJECT_SPEC.md` should clarify EB3D torsional inertia if dynamics/modal analysis is in Phase 1 scope.
+
+   Static EB3D can ignore rotary inertia, but Batch 8/9 will need a consistent mass strategy for `theta_x`. If torsional modal behavior is expected, the mass model must include the polar rotary inertia term or the plan should explicitly exclude that check.
+
+3. `EXECUTION_PLAN.md` still contains a fallback sentence for nonzero prescribed displacement.
+
+   Batch 2B is now the hard checkpoint for elimination + RHS correction. Remove the Batch 4 fallback wording so there is only one implementation path.
+
+4. GE3D/GE2D mass strategy is still not fully pinned down.
+
+   The plan can keep this as a later decision, but it must remain a hard prerequisite for Batch 8/9. Do not let dynamics/modal inherit an implicit mass assumption from the static batches.
+
+5. Generalized-alpha formulas need an explicit evaluation-time definition.
+
+   The formulas in `EXECUTION_PLAN.md` are acceptable, but the theory doc must state exactly where `R_int`, velocity, and acceleration are evaluated with `alpha_m` and `alpha_f`. Without that, implementation can easily drift into a different convention than the derivation.
+
+### Recommendation
+
+Patch these items before Batch 2B / Batch 8 work starts. None of them blocks Batch 1 or Batch 2A.
