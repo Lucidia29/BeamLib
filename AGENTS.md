@@ -1,70 +1,36 @@
-# BeamLib — 梁单元有限元库
+# BeamLib 协作入口
 
-## 项目概述
-C++17 + Eigen3 的独立梁单元有限元库，覆盖 2D/3D 小变形（Euler-Bernoulli）和大变形/大转动（几何精确梁）。
+## 先读这些文件
+1. `PROJECT_SPEC.md`: 项目总规范、硬约束、架构原则、数值基准
+2. `EXECUTION_PLAN.md`: 分阶段执行总计划、每 batch 的接口/验收标准
+3. `REVIEW_NOTES.md`: 审阅意见、变更点、待确认问题
 
-## 硬约束
-- **namespace**: 所有代码在 `beamlib` 命名空间内
-- **C++ 标准**: C++17，不使用 C++20 特性
-- **依赖**: 仅 Eigen3（header-only），无其他第三方库
-- **构建**: CMake ≥ 3.16
-- **测试**: 纯 main() 函数 + ctest，不用 gtest/catch2
+## 协作分工
+- **Claude Code (CC)**: 规划、架构设计、理论文档、主要代码实现、自测
+- **GPT/Codex**: Review 数值正确性、理论推导、边界条件、风险点检查
 
-## 目录约定
+## 工作流程
 ```
-include/BeamLib/Core/       # 基础类型 (Types.h, Node.h, SectionProperties.h)
-include/BeamLib/Math/       # 数学工具 (BeamMath3D.h, Rotation2D.h)
-include/BeamLib/Element/    # 单元 (ElementBase.h, 各元素类)
-include/BeamLib/Model/      # 模型和装配 (DofMap.h, BeamModel.h)
-include/BeamLib/Solver/     # 求解器 (LinearSolver.h, NewtonRaphson.h, 时间积分)
-include/BeamLib/Load/       # 载荷 (LoadTypes.h, LoadManager.h)
-src/                        # 仅 GeomExact3D.cpp（其余 header-only）
-tests/                      # 测试可执行文件
+每个 Batch:
+  1. CC 完成理论文档 (LaTeX PDF) — 如该 batch 涉及新理论
+  2. GPT Review 理论文档
+  3. CC 实现代码 + 编写测试
+  4. GPT Review 代码（重点: 数值、符号、边界条件）
+  5. 修订写入 REVIEW_NOTES.md
+  6. 通过后合并到 main
 ```
 
-## 元素类型接口约定
-每个元素类型是一个 struct，提供 static constexpr 和 static 方法：
-```cpp
-struct SomeElement {
-    static constexpr int nDofsPerNode = N;       // 必须
-    static constexpr bool hasTransformation = true/false; // 必须
-    
-    static ElementResult<N> computeElement(       // 必须
-        const Vec3& xA, const Vec3& xB,
-        const VecN<2*N>& dispVec,
-        const SectionProperties& props);
-    
-    static MatMN<2*N, 2*N> computeTransformation( // 当 hasTransformation=true 时必须
-        const Vec3& xA, const Vec3& xB);
-    
-    static ElementMassResult<N> computeMass(      // 可选，动力学需要
-        const Vec3& xA, const Vec3& xB,
-        const SectionProperties& props);
-};
-```
+## 关键原则
+- 文档优先于聊天记录；有分歧时以仓库内文档为准
+- MATLAB/C++ 参考代码是辅助理解，不是 Golden Standard
+- 理论文档在编码前完成，从第一性原理推导
+- 验证方案独立于参考代码（解析解、patch test、收敛性、文献基准）
 
-## DOF 顺序约定
-- **2D (nDofsPerNode=3)**: [u_x, u_z, θ_y] — xz 平面内
-- **3D (nDofsPerNode=6)**: [u_x, u_y, u_z, θ_x, θ_y, θ_z]
-- **单元 DOF**: [nodeA DOFs, nodeB DOFs]
-
-## 坐标约定
-- 梁的参考方向为局部 x 轴
-- 2D 问题在 xz 平面内（x 水平，z 竖直）
-- 3D 变换矩阵默认用参考点 (0,1,0) 构建局部 y 轴，当梁平行于全局 y 轴时切换到 (0,0,1)
-
-## 数值精度要求
-- 线性问题（EB 梁）: 1 次 NR 迭代收敛，与解析解相对误差 < 1e-10
-- 非线性问题（GE 梁小变形）: 与解析解相对误差 < 1e-4
-- 非线性问题（GE 梁大变形）: NR 收敛，无 NaN/Inf
-- 显式动力学: 无阻尼能量守恒误差 < 1%
-
-## 参考代码（只读，不修改）
-- 已有 C++: `C:\_ZW\DEM\01_res_and_dev\FSI_dev\DEM-FEM Coupling\beam_fem\`
-- MATLAB: `C:\_ZW\DEM\01_res_and_dev\FSI_dev\JaphyBeam\`
-
-## 代码风格
-- 不写注释，除非解释 WHY（非 WHAT）
-- 不加 error handling / fallback，除非在系统边界
-- 优先 header-only，只有复杂实现才用 .cpp
-- 变量命名遵循物理约定（E, G, rho, Iy, Iz 等）
+## GPT/Codex Review 聚焦点
+- 数值方法假设是否正确
+- 边界条件处理是否完备
+- DOF 索引映射（MATLAB 1-based → C++ 0-based）
+- 刚度/质量矩阵对称性
+- 残差符号约定一致性
+- Shear locking 风险
+- 坐标变换顺序和方向
