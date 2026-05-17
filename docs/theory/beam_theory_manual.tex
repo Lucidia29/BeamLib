@@ -1,0 +1,493 @@
+% BeamLib Theory Manual — unified reference covering all beam elements
+% implemented so far (Phase 1, Batches 1--3).
+%
+% Build:  pdflatex beam_theory_manual.tex   (run twice for TOC + refs)
+%
+% The per-batch deep-dive chapters
+%     01_euler_bernoulli_2d.tex   (EB2D, Batches 2A / 2B)
+%     02_euler_bernoulli_3d.tex   (EB3D, Batch 3)
+% remain authoritative for the full derivations and pitfall lists. This
+% manual is the unified, self-contained entry point that ties the two
+% elements together through their common framework.
+
+\documentclass[11pt,a4paper]{book}
+
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{enumitem}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue!50!black,
+    urlcolor=blue!60!black,
+    citecolor=blue!50!black
+}
+
+\newcommand{\dd}{\mathrm{d}}
+\newcommand{\bmath}[1]{\boldsymbol{#1}}
+\newcommand{\xhat}{\hat{x}}
+\newcommand{\yhat}{\hat{y}}
+\newcommand{\zhat}{\hat{z}}
+\newcommand{\xhatl}{\hat{x}_\ell}
+\newcommand{\yhatl}{\hat{y}_\ell}
+\newcommand{\zhatl}{\hat{z}_\ell}
+\newcommand{\Sdiag}{\bmath{S}}
+\newcommand{\lam}{\bmath{\lambda}}
+
+\title{BeamLib Theory Manual\\
+\large Phase 1, Batches 1--3 (EB2D + EB3D)}
+\author{BeamLib Development Team}
+\date{\today}
+
+\begin{document}
+\frontmatter
+\maketitle
+\tableofcontents
+
+\chapter{Preface}
+
+\section*{Purpose}
+
+This manual gives the unified theoretical foundation for the beam elements implemented in BeamLib Phase~1 so far: the planar Euler--Bernoulli (EB2D) element from Batches~2A/2B, and the spatial Euler--Bernoulli (EB3D) element from Batch~3. It is intended as a single reference that a reader can read end-to-end to understand the kinematic assumptions, sign conventions, finite-element formulation, coordinate transformations, mass-matrix strategy, and verification framework that all current BeamLib elements share.
+
+\section*{Scope versus per-batch chapters}
+
+Two batch-level theory documents already exist and remain authoritative for the full derivations and the complete formula-to-C++ index tables:
+
+\begin{itemize}
+    \item \texttt{docs/theory/01\_euler\_bernoulli\_2d.tex} --- EB2D (Batches~2A/2B). Full Hermite block derivation, internal-force sign mapping, settlement / RHS-correction proof, rotated-beam acceptance criteria.
+    \item \texttt{docs/theory/02\_euler\_bernoulli\_3d.tex} --- EB3D (Batch~3). 12$\times$12 stiffness and mass matrices, $\Sdiag\lam\Sdiag$ rotation-transformation derivation, fallback-frame algorithm, transformation verification by 3D rigid-body patch test.
+\end{itemize}
+
+This unified manual condenses both, with cross-references back to the per-batch chapters when finer detail is needed. Anything the unified manual states is either re-derived here or cited to the corresponding section in the per-batch chapter.
+
+\section*{Notation}
+
+\begin{tabular}{l l}
+\toprule
+Symbol & Meaning \\
+\midrule
+$\bmath{x}_A,\bmath{x}_B$ & nodal positions at element ends (global) \\
+$L$                       & element length $\|\bmath{x}_B - \bmath{x}_A\|$ \\
+$E, G, \rho$              & Young's modulus, shear modulus, density \\
+$A$                       & cross-section area \\
+$I_y, I_z$                & second moments of area: $I_y = \int z^2\,\dd A$, $I_z = \int y^2\,\dd A$ \\
+$I_x$                     & polar second moment (St.\ Venant torsion) \\
+$\kappa$                  & shear correction factor (Timoshenko; not used in EB) \\
+$\bmath{d}^e$             & element DOF vector \\
+$\bmath{k}_l, \bmath{m}_l$ & local element stiffness / mass \\
+$\bmath{k}_g, \bmath{m}_g$ & global element stiffness / mass \\
+$\bmath{T}$               & element transformation matrix (12$\times$12 in 3D, 6$\times$6 in 2D) \\
+$\lam$                    & 3$\times$3 frame rotation, rows $(\xhatl, \yhatl, \zhatl)$ \\
+$\Sdiag$                  & $\mathrm{diag}(1, -1, 1)$ structural-RH sign adapter \\
+$\theta_i$                & BeamLib-stored rotation DOF (structural convention) \\
+$\Omega_i$                & physical RH-rule rotation pseudovector \\
+\bottomrule
+\end{tabular}
+
+\section*{Reading guide}
+
+Chapter~\ref{ch:framework} sets the language for both elements: DOF ordering, sign conventions, residual semantics, transformation philosophy, assembly flow. Chapters~\ref{ch:eb2d} and~\ref{ch:eb3d} apply that language to each element with self-contained derivations of the element-specific stiffness and mass matrices and the verification cases. Appendix~\ref{app:tests} catalogs the implemented unit tests.
+
+\mainmatter
+
+\chapter{Common Framework}\label{ch:framework}
+
+This chapter introduces the conventions and infrastructure shared by every BeamLib beam element. The 2D and 3D elements differ only in the number of DOFs per node and the form of the transformation matrix; everything else --- residual sign, assembly loop, prescribed-displacement handling, reaction recovery --- is identical.
+
+\section{Coordinate systems and DOF order}\label{sec:dofs}
+
+BeamLib uses a single global right-handed Cartesian frame $(\xhat, \yhat, \zhat)$. Per-element \emph{local} frames are constructed from end positions and (in 3D) a user-supplied reference vector, see \S\ref{sec:transformations}.
+
+\subsection{2D elements (nDofsPerNode = 3)}
+
+Planar problems live in the $xz$-plane (with $\zhat$ vertical when drawn). The per-node DOF vector is
+\[
+\bmath{d}_i = (u_{x,i},\; u_{z,i},\; \theta_{y,i})^\mathsf{T},
+\]
+with $u_x$, $u_z$ along the corresponding global axes and $\theta_y$ being the cross-section rotation in the $xz$-plane. The element DOF vector concatenates the two nodes:
+\[
+\bmath{d}^e = (u_{xA}, u_{zA}, \theta_{yA},\;\;u_{xB}, u_{zB}, \theta_{yB})^\mathsf{T} \in \mathbb{R}^6.
+\]
+
+\subsection{3D elements (nDofsPerNode = 6)}
+
+\[
+\bmath{d}_i = (u_{x,i},\; u_{y,i},\; u_{z,i},\; \theta_{x,i},\; \theta_{y,i},\; \theta_{z,i})^\mathsf{T},
+\]
+and the element DOF vector is the 12-vector $\bmath{d}^e = (\bmath{d}_A; \bmath{d}_B)$.
+
+\section{Sign conventions}\label{sec:signs}
+
+\subsection{The BeamLib structural convention for \texorpdfstring{$\theta_y$}{theta\_y}}
+
+BeamLib defines positive $\theta_y$ as the \emph{slope} of the transverse deflection:
+\[
+\boxed{\;\theta_y = \dfrac{\dd u_z}{\dd x}\;}
+\]
+where $u_z$ is the transverse deflection along $\zhat$. This is the standard structural-mechanics convention used in most textbook formulations of EB / Timoshenko beams. It is the \emph{opposite} sign of a strict right-hand-rule rotation about $+\yhat$, because by Rodrigues' formula a positive right-hand rotation about $+\yhat$ maps $\xhat$ towards $-\zhat$, not $+\zhat$. The cross-check is direct: under a downward tip load $F_z < 0$ on a cantilever, $u_z(L) < 0$ and the slope at the tip is negative, so $\theta_y(L) < 0$. The patch test \texttt{test\_eb2d\_patch.cpp} asserts both signs simultaneously.
+
+The same structural convention is used in EB3D for $\theta_y$ in the local frame:
+\[
+\theta_y^\ell = \frac{\dd u_z^\ell}{\dd x^\ell}.
+\]
+
+\subsection{Convention for \texorpdfstring{$\theta_z$}{theta\_z} (3D)}
+
+In the local $xy$-plane, the BeamLib structural convention gives
+\[
+\theta_z^\ell = \frac{\dd u_y^\ell}{\dd x^\ell}.
+\]
+Unlike $\theta_y$, this convention \emph{matches} the right-hand-rule rotation about $+\zhatl$: by Rodrigues, $R_z^{\mathrm{RH}}(\theta)\xhatl = \cos\theta\,\xhatl + \sin\theta\,\yhatl$, so a positive RH rotation about $+\zhatl$ tilts $\xhatl$ towards $+\yhatl$, i.e.\ a positive slope. No sign discrepancy.
+
+\subsection{Convention for \texorpdfstring{$\theta_x$}{theta\_x} (3D torsion)}
+
+$\theta_x^\ell$ is the right-hand-rule torsion rotation about $+\xhatl$. There is no slope-based alternative in St.\ Venant uniform torsion, so no convention ambiguity.
+
+\subsection{Mixed convention summary}\label{sec:mixed-convention}
+
+In a single orthonormal frame, the relation between the RH-rule physical rotation pseudovector $\bmath{\Omega}$ and the BeamLib-stored rotation triplet $\bmath{\theta}$ is
+\[
+\boxed{\;\bmath{\theta} = \Sdiag\,\bmath{\Omega}, \qquad \Sdiag = \mathrm{diag}(1, -1, 1), \qquad \Sdiag^2 = \bmath{I}.\;}
+\]
+This identity holds in any orthonormal frame, including a rotated local frame. It is the foundation of the 3D rotation-block transformation derived in \S\ref{sec:slambdaSlambdaS}.
+
+\subsection{Residual sign}
+
+For a linear element, the local residual is the internal-force vector
+\[
+\bmath{r}_l = \bmath{k}_l\,\bmath{d}_l.
+\]
+Globally, $\bmath{R}_g^e = \bmath{T}^\mathsf{T}\bmath{r}_l^e$, the Newton residual is
+\[
+\bmath{R} = \bmath{R}_{\mathrm{int}} - \bmath{F}_{\mathrm{ext}},
+\]
+and the correction equation is $\bmath{K}\,\delta = -\bmath{R}$. Convergence corresponds to $\bmath{R}_{\mathrm{int}} = \bmath{F}_{\mathrm{ext}}$. A linear problem converges in exactly one correction step.
+
+\section{Coordinate transformations}\label{sec:transformations}
+
+\subsection{2D: \texttt{Rotation2D}}
+
+The 2D transformation is a $6\times 6$ block-diagonal rotation:
+\[
+\bmath{T}_{\text{2D}} = \begin{bmatrix} \bmath{T}_n & \bmath{0} \\ \bmath{0} & \bmath{T}_n \end{bmatrix},
+\qquad
+\bmath{T}_n = \begin{bmatrix} c & -s & 0 \\ s & c & 0 \\ 0 & 0 & 1 \end{bmatrix},
+\]
+with $c = \Delta x_x / L$, $s = \Delta x_z / L$ (note: $z$, not $y$, since the 2D plane is $xz$). The $\theta_y$ entry is invariant under in-plane rotation about $\yhat$ (the rotation axis is preserved), so $T_n(2,2) = 1$ with no sign quirk: the 2D structural convention causes no 2D transformation issue.
+
+\subsection{3D: \texttt{BeamMath3D}}
+
+The 3D local frame is built as
+\begin{align*}
+\xhatl &= (\bmath{x}_B - \bmath{x}_A)/L, \\
+\yhatl &= \mathrm{normalise}\bigl(\bmath{r}_{\text{ref}} - (\bmath{r}_{\text{ref}}\cdot\xhatl)\xhatl\bigr) \quad \text{(Gram--Schmidt)}, \\
+\zhatl &= \xhatl \times \yhatl.
+\end{align*}
+$\lam$ is the $3\times 3$ matrix with rows $(\xhatl, \yhatl, \zhatl)$, and is proper-orthogonal by construction. It satisfies $\bmath{v}_\ell = \lam\,\bmath{v}_g$ for any 3-vector $\bmath{v}$.
+
+\paragraph{Fallback ladder.} If $\bmath{r}_{\text{ref}}$ is parallel to $\xhatl$ the projection is zero. BeamMath3D then substitutes $\bmath{r}_{\text{ref}} = (0,0,1)$; if that too is parallel ($\xhatl = \zhat$), it substitutes $\bmath{r}_{\text{ref}} = (0,1,0)$. The pair $\{(0,0,1), (0,1,0)\}$ together cannot both be parallel to any single vector, so this ladder always terminates. The fallback order is fixed regardless of the original $\bmath{r}_{\text{ref}}$, making the constructed frame deterministic.
+
+\subsection{Element transformation \texorpdfstring{$\bmath{T}$}{T} in 3D and the \texorpdfstring{$\Sdiag\lam\Sdiag$}{S lambda S} rotation block}\label{sec:slambdaSlambdaS}
+
+The 3D element transformation is \emph{not} simply $\mathrm{diag}(\lam, \lam, \lam, \lam)$. The four diagonal $3\times 3$ blocks --- (node-A translations, node-A rotations, node-B translations, node-B rotations) --- have two flavours:
+\[
+\boxed{\;\bmath{T} = \begin{bmatrix} \lam & & & \\ & \Sdiag\lam\Sdiag & & \\ & & \lam & \\ & & & \Sdiag\lam\Sdiag \end{bmatrix}.\;}
+\]
+Translations use $\lam$; rotations use $\Sdiag\lam\Sdiag$.
+
+\paragraph{Why.} Combining \S\ref{sec:mixed-convention} with the standard pseudovector transformation rule $\bmath{\Omega}_\ell = \lam\,\bmath{\Omega}_g$,
+\[
+\bmath{\theta}_\ell \;=\; \Sdiag\,\bmath{\Omega}_\ell \;=\; \Sdiag\,\lam\,\bmath{\Omega}_g \;=\; \Sdiag\,\lam\,\Sdiag\,(\Sdiag\,\bmath{\Omega}_g) \;=\; (\Sdiag\,\lam\,\Sdiag)\,\bmath{\theta}_g.
+\]
+The plain $\lam$ block is correct only when $\lam$ commutes with $\Sdiag$, i.e.\ when $\lambda_{01} = \lambda_{10} = \lambda_{12} = \lambda_{21} = 0$. Geometrically this is the case for beams whose local frame keeps $\yhatl$ aligned with $\yhat$ (e.g.\ beams in the $xz$-plane with $\bmath{r}_{\text{ref}}=(0,1,0)$). For any other orientation the commutator $[\lam, \Sdiag] \ne \bmath{0}$ and a plain-$\lam$ rotation block produces a non-physical local rotation field, manifested as a non-zero residual under a true rigid-body motion.
+
+\paragraph{Implementation.} $\Sdiag\lam\Sdiag$ is an element-wise sign flip on the row index $1$ \emph{and} column index $1$ of $\lam$. In code:
+\begin{verbatim}
+    Mat3 lambda_rot = lambda;
+    lambda_rot.row(1) *= -1.0;
+    lambda_rot.col(1) *= -1.0;
+\end{verbatim}
+Orthogonality of $\bmath{T}$ is preserved because $(\Sdiag\lam\Sdiag)^\mathsf{T}(\Sdiag\lam\Sdiag) = \Sdiag\lam^\mathsf{T}\Sdiag\Sdiag\lam\Sdiag = \Sdiag\lam^\mathsf{T}\lam\Sdiag = \Sdiag^2 = \bmath{I}$.
+
+\paragraph{Verification.} \texttt{tests/test\_eb3d\_rigid\_body.cpp} chooses a beam orientation for which $\lam$ does not commute with $\Sdiag$ (in-plane $xy$-rotation plus a non-default $\bmath{r}_{\text{ref}}$), imposes a rigid-body motion $\bmath{u} = \bmath{t} + \bmath{\Omega}\times\bmath{X}$ with stored rotation $\bmath{\theta} = \Sdiag\,\bmath{\Omega}$, and asserts $\|\bmath{R}_{\mathrm{int}}\| \approx 0$. On the buggy plain-$\lam$ code the residual norm was $\mathcal{O}(EI\,\Omega / L) \sim 10^4$; on the fixed code it is at the linear-solver / floating-point noise level.
+
+\subsection{Application convention}
+
+In both 2D and 3D, BeamLib applies $\bmath{T}$ as
+\[
+\bmath{d}_\ell = \bmath{T}\,\bmath{d}_g, \qquad
+\bmath{r}_g = \bmath{T}^\mathsf{T}\bmath{r}_\ell, \qquad
+\bmath{k}_g = \bmath{T}^\mathsf{T}\bmath{k}_\ell\,\bmath{T}, \qquad
+\bmath{m}_g = \bmath{T}^\mathsf{T}\bmath{m}_\ell\,\bmath{T}.
+\]
+
+\section{Shape functions}\label{sec:shape}
+
+\subsection{Linear (axial, torsion)}
+\[
+N_1(\xi) = 1 - \xi, \qquad N_2(\xi) = \xi, \qquad \xi = x/L \in [0, 1].
+\]
+
+\subsection{Cubic Hermite (bending)}
+\begin{align*}
+H_1(\xi) &= 1 - 3\xi^2 + 2\xi^3, & H_2(\xi) &= L\,(\xi - 2\xi^2 + \xi^3), \\
+H_3(\xi) &= 3\xi^2 - 2\xi^3,     & H_4(\xi) &= L\,(-\xi^2 + \xi^3).
+\end{align*}
+Endpoint values: $H_1(0)=1$, $H_3(1)=1$; derivatives $H_2'(0) = 1$, $H_4'(1) = 1$ (after the $\dd/\dd x = (1/L)\,\dd/\dd\xi$ factor). These four basis functions interpolate $(u, \dd u/\dd x)$ at the two ends, which is exactly what the BeamLib structural rotation convention $\theta = \dd u/\dd x$ enforces. The resulting $4\times 4$ Hermite stiffness block in DOF order $(u, \theta, u, \theta)$ is
+\[
+\bmath{k}_b = \frac{EI}{L^3}\begin{bmatrix}
+12 & 6L & -12 & 6L \\
+6L & 4L^2 & -6L & 2L^2 \\
+-12 & -6L & 12 & -6L \\
+6L & 2L^2 & -6L & 4L^2
+\end{bmatrix}
+\]
+and the consistent mass block is
+\[
+\bmath{m}_b = \frac{\rho A L}{420}\begin{bmatrix}
+156 & 22L & 54 & -13L \\
+22L & 4L^2 & 13L & -3L^2 \\
+54  & 13L & 156 & -22L \\
+-13L & -3L^2 & -22L & 4L^2
+\end{bmatrix}.
+\]
+Both EB2D and EB3D use these blocks; only the moment of inertia and the embedding indices differ.
+
+\section{Mass-matrix strategy}\label{sec:mass-strategy}
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{EB2D}: consistent translational mass on $u_x$ (linear) + Hermite mass on $(u_z, \theta_y)$. No rotary inertia. PROJECT\_SPEC \S3.4.
+    \item \textbf{EB3D}: consistent translational mass on $u_x$, $u_y$, $u_z$ + Hermite mass on the two bending planes + \emph{required} torsional rotary inertia $\rho I_x L/6 \cdot [[2,1],[1,2]]$ on $\theta_x$. Bending rotary inertia is excluded (standard EB practice; the diagonal entries $4L^2\,\rho A L/420$ on $\theta_y$, $\theta_z$ are not rotary inertia but Hermite shape-function self-coupling of the translational mass).
+    \item \textbf{Future Timoshenko (Batches~4/5)}: will add bending rotary inertia $\rho I$.
+    \item \textbf{Future GE (Batches~6/7)}: mass strategy pending the GE theory document. Consistent mass is required for implicit dynamics and modal analysis; lumped mass was used by the reference C++ explicit-dynamics implementation only.
+\end{itemize}
+
+\section{Assembly}\label{sec:assembly}
+
+The free-DOF assembly loop in \texttt{BeamModel::assemble} is identical for both elements:
+\begin{enumerate}
+    \item Build the \texttt{DofMap}: each unconstrained DOF gets a free-system index; fixed DOFs receive index $-1$.
+    \item Loop over elements. For each element:
+    \begin{enumerate}
+        \item Build $\bmath{T}^e$ (2D or 3D depending on the element trait).
+        \item Gather $\bmath{d}_g^e$ from nodal storage. Fixed DOFs carry their prescribed value through \texttt{Node::totalDof}, so the local displacement vector automatically includes any nonzero prescribed values.
+        \item Pass canonical local coordinates $\bmath{x}_A^{\text{loc}} = \bmath{0}$, $\bmath{x}_B^{\text{loc}} = (L,0,0)$ and $\bmath{d}_\ell^e = \bmath{T}^e\,\bmath{d}_g^e$ to \texttt{ElemType::computeElement}.
+        \item Transform back: $\bmath{r}_g^e = (\bmath{T}^e)^\mathsf{T}\bmath{r}_\ell^e$, $\bmath{k}_g^e = (\bmath{T}^e)^\mathsf{T}\bmath{k}_\ell^e\,\bmath{T}^e$.
+        \item Scatter rows / columns whose DofMap index is non-negative into the free-DOF system.
+    \end{enumerate}
+    \item Set the sparse stiffness from the accumulated triplets.
+\end{enumerate}
+
+The mass-matrix assembly is identical with \texttt{computeMass} in place of \texttt{computeElement}.
+
+\section{Prescribed displacement (elimination + RHS correction)}\label{sec:prescribed}
+
+For a fixed DOF with a nonzero prescribed value $u_r$, the partitioned system is
+\[
+\begin{bmatrix} \bmath{K}_{ff} & \bmath{K}_{fr} \\ \bmath{K}_{rf} & \bmath{K}_{rr} \end{bmatrix}
+\begin{bmatrix} \bmath{u}_f \\ \bmath{u}_r \end{bmatrix}
+=
+\begin{bmatrix} \bmath{F}_f^{\mathrm{ext}} \\ \bmath{F}_r^{\mathrm{ext}} + \bmath{R}_r^{\mathrm{reaction}} \end{bmatrix}.
+\]
+The free-DOF equation is $\bmath{K}_{ff}\,\bmath{u}_f = \bmath{F}_f^{\mathrm{ext}} - \bmath{K}_{fr}\,\bmath{u}_r$. BeamLib does not explicitly form $\bmath{K}_{fr}$. Instead, \texttt{Node::totalDof} returns the prescribed value at fixed DOFs, so the element-local displacement vector built during assembly carries the prescribed contribution, and $\bmath{r}_\ell^e = \bmath{k}_\ell^e\bmath{d}_\ell^e$ at a free DOF already contains the $(\bmath{K}_{fr}\bmath{u}_r)_i$ term. The free-DOF residual after assembly is therefore exactly $\bmath{R}_{\mathrm{int}} - \bmath{F}_{\mathrm{ext}}$ with the correct RHS correction baked in. Phase~1 does \emph{not} use Lagrange multipliers or penalty methods.
+
+\section{Reaction recovery}\label{sec:reactions}
+
+After convergence, the full-system internal residual $\bmath{R}_{\mathrm{int}}^{\text{full}}$ is re-assembled over all DOFs (no row / column elimination). The reaction at every constrained DOF is
+\[
+R_d^{\mathrm{reaction}} = R_d^{\mathrm{int,full}} - F_d^{\mathrm{ext}},
+\]
+including loads applied at the constrained DOF itself (e.g.\ a concentrated force at a support node). Free DOFs receive zero reaction by convention. The structural-convention $\theta_y$ has a sign caveat in the EB2D moment reaction: $M_y^{\mathrm{reaction}} = -EI\,w''|_{\text{section}}$ for the cantilever cross-check (see \texttt{01\_euler\_bernoulli\_2d.tex} \S\ref{sec:reactions} for the full discussion).
+
+\section{Internal-force post-processing}\label{sec:internal-forces}
+
+Each element exposes \texttt{computeInternalForces} returning cross-section ``beam-diagram'' values at both ends. For EB2D the full set $\{N, V_z, M_y\}$ at each end is produced from $\bmath{f}_e = \bmath{k}_\ell\,\bmath{d}_\ell$ with the sign mapping documented in the EB2D chapter. For EB3D the full 3D set is $\{N, V_y, V_z, T, M_y, M_z\}$, but Phase~1 currently exposes only the 2D subset $\{N, V_z, M_y\}$ through the shared \texttt{ElementInternalForces} struct; $V_y$, $M_z$, $T$ are deferred to a later batch that extends the struct.
+
+\chapter{Euler--Bernoulli 2D Beam (EB2D)}\label{ch:eb2d}
+
+This chapter is the unified summary of EB2D; the full derivations and proofs are in \texttt{docs/theory/01\_euler\_bernoulli\_2d.tex}.
+
+\section{Scope}
+
+Planar slender beam in the $xz$-plane. EB kinematics (plane sections, no shear), small displacements, linear elastic isotropic homogeneous cross-section. Use for slenderness ratios $L/h > 20$. Shear-deformable cases require Timoshenko (Batch~4).
+
+\section{Kinematics and strain}
+
+Axial displacement of a material point at offset $z$ from the neutral axis:
+\[
+u(x, z) = u_x(x) - z\,\theta_y(x) = u_x(x) - z\,\frac{\dd u_z}{\dd x}.
+\]
+Axial strain:
+\[
+\varepsilon_x = \frac{\dd u_x}{\dd x} - z\,\frac{\dd^2 u_z}{\dd x^2}.
+\]
+After cross-sectional integration the strain energy per unit length is
+\[
+\frac{1}{2}\,EA\,(u_x')^2 + \frac{1}{2}\,EI_z\,(u_z'')^2.
+\]
+\textbf{EB2D bending uses $I_z$} because the $xz$-plane bending is about the $y$-axis, and $I_z = \int z^2\,\dd A$ is the second moment about that axis under the BeamLib convention (see footnote in \texttt{01\_euler\_bernoulli\_2d.tex} \S3). Using \texttt{props.Iy} in 2D is a silent bug.
+
+\section{Element stiffness (6\texorpdfstring{$\times$}{x}6)}
+
+Indexing the 6 element DOFs as $(u_{xA}, u_{zA}, \theta_{yA}, u_{xB}, u_{zB}, \theta_{yB})$, the local stiffness $\bmath{k}_l$ has axial entries on indices $(0, 3)$ and the Hermite bending block on indices $(1, 2, 4, 5)$:
+\begin{align*}
+k_l(0,0) &= k_l(3,3) = \tfrac{EA}{L}, & k_l(0,3) &= -\tfrac{EA}{L}, \\
+k_l(1,1) &= k_l(4,4) = \tfrac{12 E I_z}{L^3}, & k_l(1,4) &= -\tfrac{12 E I_z}{L^3}, \\
+k_l(1,2) &= k_l(2,1) = \tfrac{6 E I_z}{L^2}, & k_l(1,5) &= k_l(5,1) = \tfrac{6 E I_z}{L^2}, \\
+k_l(2,2) &= k_l(5,5) = \tfrac{4 E I_z}{L},   & k_l(2,5) &= \tfrac{2 E I_z}{L}, \\
+k_l(2,4) &= k_l(4,2) = -\tfrac{6 E I_z}{L^2},& k_l(4,5) &= k_l(5,4) = -\tfrac{6 E I_z}{L^2}.
+\end{align*}
+
+\section{Element mass (6\texorpdfstring{$\times$}{x}6)}
+
+The Hermite mass block embedded in the bending DOFs, plus the linear axial mass block:
+\begin{align*}
+m_l(0,0) &= m_l(3,3) = \tfrac{\rho A L}{3}, & m_l(0,3) &= \tfrac{\rho A L}{6}, \\
+m_l(1,1) &= m_l(4,4) = \tfrac{156\,\rho A L}{420}, & m_l(1,4) &= \tfrac{54\,\rho A L}{420}, \\
+\text{etc.} & & & \text{(see \texttt{01\_euler\_bernoulli\_2d.tex} \S\ref{sec:mass-strategy}).}
+\end{align*}
+
+\section{2D transformation}
+
+$\bmath{T}_{\text{2D}}$ is described in \S\ref{sec:transformations}. The element-level call \texttt{EulerBernoulli2D::computeTransformation} ignores its \texttt{refVector} argument (taken only for interface uniformity with 3D elements); the 2D rotation about $\yhat$ is fully determined by $(\Delta x_x, \Delta x_z)$.
+
+\section{Verification cases (Batches 2A / 2B)}\label{sec:eb2d-verification}
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Cantilever under tip $F_z$}: $u_z(L) = F_z L^3/(3 E I_z)$, $\theta_y(L) = F_z L^2/(2 E I_z)$. Both negative under downward load. Relative error $< 10^{-9}$ in 1 NR step.
+    \item \textbf{Cantilever under tip end moment $M_y$}: constant curvature, parabolic deflection, linear rotation. Hermite reproduces a quadratic exactly $\Rightarrow$ round-off accuracy.
+    \item \textbf{Patch tests}: stiffness entries to $10^{-12}$ relative; rigid-translation residual $< 10^{-12}$ absolute; constant-strain axial; $\theta_y$ sign check under downward $F_z$.
+    \item \textbf{Simply-supported beam, uniform load}: midspan deflection $5qL^4/(384 E I_z)$ to $10^{-8}$ relative with 20 elements; support reactions $qL/2$ to $10^{-9}$. Equivalent nodal loads $(qL_e/2,\,qL_e^2/12)$ assembled manually in the test (no \texttt{LoadManager} dependency).
+    \item \textbf{Rotated beam}: 45-deg beam in $xz$-plane, both a local-transverse-force subtest (transform local force to global, solve, transform displacement back, compare with horizontal reference) and a global-force subtest (verify expected local axial/transverse coupling).
+    \item \textbf{Settlement (Batch~2B)}: two-end-fixed beam with one-end prescribed sinking. Verifies elimination + RHS correction and reaction recovery for the constrained DOF.
+    \item \textbf{Mass matrix}: covers \texttt{assembleMass}, the only Batch 8/9 prerequisite. Three sub-tests: horizontal single element, vertical single element ($T^\mathsf{T} M_l T$), two-element fixed-root.
+\end{itemize}
+
+\chapter{Euler--Bernoulli 3D Beam (EB3D)}\label{ch:eb3d}
+
+This chapter is the unified summary of EB3D; full derivations and the $\Sdiag\lam\Sdiag$ proof are in \texttt{docs/theory/02\_euler\_bernoulli\_3d.tex}.
+
+\section{Scope}
+
+Spatial slender beam, 6 DOFs per node, axial + St.\ Venant torsion + two uncoupled local bending planes ($xy$ uses $E I_z$, $xz$ uses $E I_y$). Linear elastic, no shear (Timoshenko 3D handles shear, Batch~5).
+
+\section{Local frame and \texttt{refVector}}
+
+See \S\ref{sec:transformations}. The 3D local frame depends only on $\bmath{x}_A$, $\bmath{x}_B$, $\bmath{r}_{\text{ref}}^e$ --- not on absolute nodal positions (translation-invariance, in contrast to the reference DEM-FEM C++ implementation whose \texttt{V13 = refNode - xA} formulation is position-dependent). The fallback ladder is fixed at $(0,0,1) \to (0,1,0)$ regardless of the user-supplied $\bmath{r}_{\text{ref}}$.
+
+\section{Strain components}
+
+Four uncoupled local contributions:
+\begin{itemize}
+    \item Axial: $\varepsilon_x = u_x'$, energy density $\tfrac{1}{2} EA\,(u_x')^2$.
+    \item Torsion: $\tfrac{1}{2} G I_x\,(\theta_x')^2$, St.\ Venant uniform torsion.
+    \item $xz$-bending: $\tfrac{1}{2} E I_y\,(u_z'')^2$ with $\theta_y = u_z'$.
+    \item $xy$-bending: $\tfrac{1}{2} E I_z\,(u_y'')^2$ with $\theta_z = u_y'$.
+\end{itemize}
+
+\section{Element stiffness (12\texorpdfstring{$\times$}{x}12)}
+
+Four sparse blocks at fixed indices:
+\begin{center}
+\begin{tabular}{l l l l}
+\toprule
+Mode & Indices & Block & Stiffness coefficient \\
+\midrule
+Axial    & $(0, 6)$           & $2\times 2$ linear & $EA/L$ \\
+Torsion  & $(3, 9)$           & $2\times 2$ linear & $G I_x / L$ \\
+$xy$-bending & $(1, 5, 7, 11)$    & $4\times 4$ Hermite & $E I_z / L^3$ scaling \\
+$xz$-bending & $(2, 4, 8, 10)$    & $4\times 4$ Hermite & $E I_y / L^3$ scaling \\
+\bottomrule
+\end{tabular}
+\end{center}
+Both Hermite blocks have the same form: the structural definition $\theta = u'$ makes the Hermite sign pattern identical in both planes. Detailed entry-by-entry table: \texttt{02\_euler\_bernoulli\_3d.tex} \S\ref{sec:stiffness}.
+
+\section{Element mass (12\texorpdfstring{$\times$}{x}12)}
+
+Four blocks following the stiffness pattern:
+\begin{itemize}
+    \item Axial mass at $(0, 6)$: $\rho A L / 6 \cdot [[2,1],[1,2]]$.
+    \item \textbf{Torsional rotary inertia} at $(3, 9)$: $\rho I_x L / 6 \cdot [[2,1],[1,2]]$. \emph{Required}; without it $\theta_x$ is mass-less and torsional modes are missing from any modal / dynamic analysis (PROJECT\_SPEC \S3.4, Codex Round~3 issue~2).
+    \item $xy$-bending mass at $(1, 5, 7, 11)$: standard Hermite mass scaled by $\rho A L / 420$.
+    \item $xz$-bending mass at $(2, 4, 8, 10)$: same.
+\end{itemize}
+No bending rotary inertia ($\rho I_y$, $\rho I_z$ are not added). Timoshenko 3D (Batch~5) will introduce these.
+
+\section{3D transformation: the \texorpdfstring{$\Sdiag\lam\Sdiag$}{S lambda S} adapter}
+
+See \S\ref{sec:slambdaSlambdaS}. The rigid-body patch test \texttt{test\_eb3d\_rigid\_body.cpp} is the gold-standard verification: imposing $\bmath{u} = \bmath{t} + \bmath{\Omega}\times\bmath{X}$ on an arbitrary-orientation element with stored rotation $\bmath{\theta} = \Sdiag\,\bmath{\Omega}$ must produce zero internal residual. With the plain-$\lam$ rotation block (Codex's flagged bug) the residual norm was $\sim 4.3 \times 10^4$ on a test geometry; with the fixed $\Sdiag\lam\Sdiag$ block it is at floating-point noise level.
+
+\section{Verification cases (Batch 3)}\label{sec:eb3d-verification}
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Cantilever under tip $F_z$}: $u_z(L) = F_z L^3 / (3 E I_y)$, $\theta_y(L) = F_z L^2 / (2 E I_y)$. xz-plane bending engages with $I_y$.
+    \item \textbf{Cantilever under tip $F_y$}: $u_y(L) = F_y L^3 / (3 E I_z)$, $\theta_z(L) = F_y L^2 / (2 E I_z)$. xy-plane bending engages with $I_z$.
+    \item \textbf{Pure torsion}: $\theta_x(L) = T_x L / (G I_x)$ linearly along the span; root reaction $-T_x$.
+    \item \textbf{Coordinate transformation}: rotated-beam local-frame round-trip, \texttt{refVector} reorients the bending plane (changes which $I$ governs deflection), both fallback levels exercised.
+    \item \textbf{EB2D / EB3D cross-check}: horizontal beam, $I_y^{3D} = I_z^{2D}$, identical tip $u_z$ and $\theta_y$ to $10^{-9}$ relative. Tests that the two implementations agree in the shared $xz$-plane physics.
+    \item \textbf{3D rigid-body patch test}: arbitrarily oriented element with non-trivial $\lam$ does not commute with $\Sdiag$; rigid-body residual norm $< 10^{-9}$.
+    \item \textbf{Mass matrix}: four sub-tests covering local-block entries (all four blocks), $T^\mathsf{T} M_l T$ for a rotated element, two-element shared-node accumulation, and generic-orientation consistency against direct $T^\mathsf{T} M_l T$.
+\end{itemize}
+
+\section{Internal forces (deferred for EB3D)}
+
+The Phase~1 \texttt{ElementInternalForces} struct (used by EB2D) exposes only $\{N, V_z, M_y\}$. Extending it to the full 3D set $\{N, V_y, V_z, T, M_y, M_z\}$ is deferred to a later batch. The current EB3D \texttt{computeInternalForces} stub fills $\{N, V_z, M_y\}$ using the same sign mapping as EB2D; $V_y$, $M_z$, $T$ are explicitly out of scope until the struct is extended. No Batch~3 test reads internal forces. The torsion reaction test reaches the answer through \texttt{computeReactions}, which uses the full element residual instead of these per-cross-section quantities.
+
+\appendix
+
+\chapter{Test catalog}\label{app:tests}
+
+The full Phase 1 (Batches 1--3) test list and what each one covers. Run with \texttt{ctest --test-dir build --output-on-failure}; all currently pass.
+
+\begin{longtable}{p{4.5cm} l p{8cm}}
+\toprule
+Test & Batch & Coverage \\
+\midrule \endhead
+\texttt{test\_compile\_check}        & 1  & Scaffold: all headers include cleanly; \texttt{Node<3>}, \texttt{Node<6>}, \texttt{SectionProperties}, \texttt{ElementResult} dimensions; \texttt{ElementConn::refVector} default. \\
+\texttt{test\_eb2d\_cantilever}      & 2A & 10-element cantilever, tip $F_z$, analytic $u_z / \theta_y$, 1 NR step, $\theta_y$ negative under downward load. \\
+\texttt{test\_eb2d\_patch}           & 2A & Stiffness entries vs.\ analytical, rigid-translation residual, constant-strain axial, $\theta_y$ sign under $F_z<0$. \\
+\texttt{test\_eb2d\_moment}          & 2A & Pure end moment, parabolic deflection, linear rotation, positive sign chain. \\
+\texttt{test\_eb2d\_postprocess}     & 2B & Cantilever reactions ($R_z$, $M_y$); element internal forces along the span. \\
+\texttt{test\_eb2d\_simply\_supported}& 2B & 20-element simply supported beam, uniform load, midspan deflection, support reactions $qL/2$. \\
+\texttt{test\_eb2d\_rotated\_beam}   & 2B & 45-deg beam: local-transverse round-trip subtest + global-vertical-force coupling subtest. \\
+\texttt{test\_eb2d\_settlement}      & 2B & Nonzero prescribed displacement (one end sinks); deflection field; constrained-DOF reaction. \\
+\texttt{test\_eb2d\_mass}            & 2B & \texttt{assembleMass} coverage: horizontal element, vertical element ($T^\mathsf{T} M_l T$), two-element fixed root. \\
+\texttt{test\_eb3d\_cantilever}      & 3  & Tip $F_z$ (xz-plane, $I_y$) and tip $F_y$ (xy-plane, $I_z$) cases, both 1 NR step. \\
+\texttt{test\_eb3d\_torsion}         & 3  & Pure torsion, linear $\theta_x$, root reaction $-T_x$. \\
+\texttt{test\_eb3d\_transform}       & 3  & Rotated-beam round-trip, \texttt{refVector} reorients bending plane, both fallback levels. \\
+\texttt{test\_eb2d\_eb3d\_crosscheck}& 3  & EB2D $I_z = $ EB3D $I_y$ in the $xz$-plane; tip $u_z$, $\theta_y$ agreement $<10^{-9}$. \\
+\texttt{test\_eb3d\_rigid\_body}     & 3  & Arbitrary orientation, non-axis-aligned $\lam$, rigid-body motion $\Rightarrow$ zero residual. Exercises $\Sdiag\lam\Sdiag$. \\
+\texttt{test\_eb3d\_mass}            & 3  & EB3D mass block-by-block, transformed mass, two-element accumulation, generic-orientation $T^\mathsf{T} M_l T$ consistency. \\
+\bottomrule
+\caption{Phase 1 test catalog (15 tests, all PASS).}
+\end{longtable}
+
+\chapter{Index-to-formula master table (3D)}\label{app:index-master}
+
+Combined view of the 12$\times$12 EB3D local stiffness and mass index map, useful when cross-reading the source code:
+
+\begin{tabular}{l l l l}
+\toprule
+DOF index & Quantity & Stiffness uses & Mass term \\
+\midrule
+0 & $u_{xA}$ axial & $EA/L$ & $\rho A L / 3$ (diag), $\rho A L / 6$ off \\
+1 & $u_{yA}$ transverse (xy) & $E I_z$, Hermite & $\rho A L / 420 \cdot 156$ (diag) \\
+2 & $u_{zA}$ transverse (xz) & $E I_y$, Hermite & $\rho A L / 420 \cdot 156$ (diag) \\
+3 & $\theta_{xA}$ torsion & $G I_x / L$ & $\rho I_x L / 3$ (diag), $\rho I_x L / 6$ off \\
+4 & $\theta_{yA}$ rotation (xz) & $E I_y$ couplings & $\rho A L / 420 \cdot 4 L^2$ (diag) \\
+5 & $\theta_{zA}$ rotation (xy) & $E I_z$ couplings & $\rho A L / 420 \cdot 4 L^2$ (diag) \\
+6--11 & node-B DOFs & (mirror of 0--5) & (mirror of 0--5) \\
+\bottomrule
+\end{tabular}
+
+\bigskip
+
+The 2D EB2D index map (6 DOFs total) is the planar subset: axial $(0, 3)$, bending $(1, 2, 4, 5)$ with $I_z$, and no torsion or out-of-plane bending blocks. See \texttt{01\_euler\_bernoulli\_2d.tex} \S\ref{sec:stiffness} for the entry-by-entry table.
+
+\end{document}
