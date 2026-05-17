@@ -84,3 +84,20 @@ add_test(NAME test_eb2d_settlement COMMAND test_eb2d_settlement)
 add_executable(test_eb2d_mass tests/test_eb2d_mass.cpp)
 target_link_libraries(test_eb2d_mass beamlib)
 add_test(NAME test_eb2d_mass COMMAND test_eb2d_mass)
+
+# --- Batch 3: EB3D ---
+add_executable(test_eb3d_cantilever tests/test_eb3d_cantilever.cpp)
+target_link_libraries(test_eb3d_cantilever beamlib)
+add_test(NAME test_eb3d_cantilever COMMAND test_eb3d_cantilever)
+
+add_executable(test_eb3d_torsion tests/test_eb3d_torsion.cpp)
+target_link_libraries(test_eb3d_torsion beamlib)
+add_test(NAME test_eb3d_torsion COMMAND test_eb3d_torsion)
+
+add_executable(test_eb3d_transform tests/test_eb3d_transform.cpp)
+target_link_libraries(test_eb3d_transform beamlib)
+add_test(NAME test_eb3d_transform COMMAND test_eb3d_transform)
+
+add_executable(test_eb2d_eb3d_crosscheck tests/test_eb2d_eb3d_crosscheck.cpp)
+target_link_libraries(test_eb2d_eb3d_crosscheck beamlib)
+add_test(NAME test_eb2d_eb3d_crosscheck COMMAND test_eb2d_eb3d_crosscheck)
