@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>BeamLib — Batch 4 Timoshenko 2D Test Results</title>
+<style>
+  :root {
+    --bg: #f8fafc;
+    --card: #ffffff;
+    --text: #0f172a;
+    --text-dim: #64748b;
+    --border: #e2e8f0;
+    --border-strong: #cbd5e1;
+    --blue: #2563eb;
+    --blue-light: #dbeafe;
+    --red: #dc2626;
+    --red-light: #fee2e2;
+    --green: #16a34a;
+    --green-light: #dcfce7;
+    --orange: #ea580c;
+    --orange-light: #ffedd5;
+    --violet: #7c3aed;
+    --violet-light: #ede9fe;
+    --slate: #475569;
+    --mono: ui-monospace, 'Cascadia Code', 'Consolas', Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    padding: 2rem 1rem;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+                 'Microsoft YaHei', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.55;
+  }
+  .container { max-width: 1180px; margin: 0 auto; }
+
+  header {
+    padding-bottom: 1rem;
+    margin-bottom: 1.5rem;
+    border-bottom: 2px solid var(--border);
+  }
+  header h1 { margin: 0 0 0.3rem 0; font-size: 1.75rem; letter-spacing: -0.01em; }
+  .subtitle { color: var(--text-dim); font-size: 0.95rem; margin: 0; }
+  .subtitle code { background: #e2e8f0; padding: 0.05rem 0.4rem; border-radius: 3px; font-size: 0.9em; }
+
+  .summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+    margin: 1.25rem 0 2rem 0;
+  }
+  .stat {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.9rem 1rem;
+  }
+  .stat-label { font-size: 0.78rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+  .stat-value { font-size: 1.5rem; font-weight: 600; margin-top: 0.2rem; font-family: var(--mono); }
+  .stat-value.pass { color: var(--green); }
+
+  .test-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.4rem 1.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 1px 2px rgba(15,23,42,0.04);
+  }
+  .test-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 0.4rem;
+  }
+  .test-header .left { display: flex; align-items: baseline; gap: 0.6rem; flex-wrap: wrap; }
+  .test-title { font-size: 1.25rem; font-weight: 600; margin: 0; }
+  .test-id { color: var(--text-dim); font-family: var(--mono); font-size: 0.85rem; }
+  .badge {
+    display: inline-block;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+  }
+  .badge.pass { background: var(--green-light); color: var(--green); }
+  .badge.new  { background: var(--blue-light); color: var(--blue); }
+  .badge.key  { background: var(--violet-light); color: var(--violet); }
+  .test-summary { color: var(--text-dim); margin: 0 0 1rem 0; font-size: 0.95rem; }
+
+  .test-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+    gap: 1.5rem;
+    align-items: start;
+  }
+  @media (max-width: 820px) {
+    .test-body { grid-template-columns: 1fr; }
+  }
+  .panel h3 {
+    margin: 0 0 0.6rem 0;
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  th, td { padding: 0.4rem 0.55rem; text-align: left; border-bottom: 1px solid var(--border); }
+  th { font-weight: 600; color: var(--text-dim); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; }
+  td.num { font-family: var(--mono); text-align: right; white-space: nowrap; }
+  .err-ok { color: var(--green); font-family: var(--mono); font-size: 0.88rem; }
+
+  code { font-family: var(--mono); font-size: 0.88em; background: #f1f5f9; padding: 0.05rem 0.3rem; border-radius: 3px; }
+  .formula {
+    background: #f8fafc;
+    border-left: 3px solid var(--blue);
+    padding: 0.5rem 0.75rem;
+    margin: 0.5rem 0;
+    font-family: var(--mono);
+    font-size: 0.88rem;
+    border-radius: 0 4px 4px 0;
+  }
+  .formula .lbl { color: var(--text-dim); margin-right: 0.4rem; }
+
+  dl.params { margin: 0; font-size: 0.9rem; }
+  dl.params dt { font-weight: 600; display: inline; color: var(--slate); }
+  dl.params dt::after { content: ': '; }
+  dl.params dd { margin: 0 0 0.25rem 0; display: inline; font-family: var(--mono); }
+  dl.params dd::after { content: '\A'; white-space: pre; }
+
+  svg { width: 100%; height: auto; display: block; }
+  .svg-wrap {
+    background: #fafbfc;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.5rem;
+  }
+  .scale-note {
+    text-align: center;
+    margin-top: 0.4rem;
+    color: var(--text-dim);
+    font-size: 0.8rem;
+    font-family: var(--mono);
+  }
+
+  .subtest-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem;
+    margin-bottom: 0.6rem;
+  }
+  @media (max-width: 600px) { .subtest-grid { grid-template-columns: 1fr; } }
+  .subtest {
+    background: #f8fafc;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.6rem 0.75rem;
+  }
+  .subtest .top {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 0.25rem;
+  }
+  .subtest .name { font-weight: 600; font-size: 0.9rem; }
+  .subtest .desc { font-size: 0.82rem; color: var(--text-dim); }
+  .badge.sm { font-size: 0.7rem; padding: 0.1rem 0.4rem; }
+
+  .note {
+    background: var(--orange-light);
+    border-left: 3px solid var(--orange);
+    padding: 0.5rem 0.8rem;
+    margin: 1rem 0 0 0;
+    font-size: 0.88rem;
+    border-radius: 0 4px 4px 0;
+  }
+  .note strong { color: #9a3412; }
+  .note.info {
+    background: var(--violet-light);
+    border-left-color: var(--violet);
+  }
+  .note.info strong { color: #5b21b6; }
+
+  footer {
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: 0.85rem;
+  }
+  footer code { background: #e2e8f0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<header>
+  <h1>BeamLib · Batch 4 Timoshenko 2D</h1>
+  <p class="subtitle">Branch <code>feat/batch-4-timo2d</code> · Φ-corrected closed-form 2-node Timoshenko element with locking-free stiffness and rotary inertia</p>
+</header>
+
+<div class="summary">
+  <div class="stat">
+    <div class="stat-label">New tests (Batch 4)</div>
+    <div class="stat-value pass">6 / 6 PASS</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Total (Batches 1–4)</div>
+    <div class="stat-value pass">21 / 21 PASS</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Codex findings</div>
+    <div class="stat-value pass">none</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Stiffness</div>
+    <div class="stat-value pass">Φ-corrected</div>
+  </div>
+</div>
+
+<div class="note info" style="margin: 0 0 1.5rem 0;">
+  <strong>What Batch 4 adds.</strong> 2D Timoshenko beam with the same DOF order as EB2D <code>[u<sub>x</sub>, u<sub>z</sub>, θ<sub>y</sub>]</code>. Shear-deformable kinematics with constitutive shear stiffness <code>κGA</code>. Locking-free <strong>Φ-corrected closed-form 2-node stiffness</strong>: defining <code>Φ = 12 EI / (κGA L²)</code>, the bending/shear block has a <code>(1+Φ)</code> denominator and <code>(4±Φ)L²</code> coupling entries. Reduces exactly to the EB2D Hermite block in the slender limit Φ → 0. Consistent mass = Hermite translational mass (same as EB2D) <em>plus</em> explicit rotary inertia <code>ρ·I<sub>z</sub>·L/6 · [[2,1],[1,2]]</code> on the θ<sub>y</sub> DOFs. The Timoshenko–EB2D mass delta is exactly this 2×2 rotary block.
+</div>
+
+<!-- ============================================================ -->
+<!-- TEST 1: CANTILEVER (analytical) -->
+<!-- ============================================================ -->
+<section class="test-card">
+  <div class="test-header">
+    <div class="left">
+      <h2 class="test-title">Cantilever under tip transverse load (analytical Timoshenko)</h2>
+      <span class="test-id">test_timo2d_cantilever.cpp</span>
+      <span class="badge new">NEW</span>
+    </div>
+    <span class="badge pass">PASS</span>
+  </div>
+  <p class="test-summary">10-element cantilever along +x with tip <code>F<sub>z</sub> = −1000 N</code>. The closed-form Timoshenko cantilever solution adds a shear-flexibility term to the EB bending deflection; both terms must be recovered to relative 1e−9 in exactly one NR correction step.</p>
+
+  <div class="test-body">
+    <div class="panel">
+      <h3>Setup</h3>
+      <dl class="params">
+        <dt>E</dt><dd>200 × 10⁹ Pa</dd>
+        <dt>G</dt><dd>80 × 10⁹ Pa</dd>
+        <dt>A, I<sub>z</sub></dt><dd>0.01 m², 8.333 × 10⁻⁶ m⁴</dd>
+        <dt>κ<sub>z</sub></dt><dd>5 / 6 (rectangular section)</dd>
+        <dt>L, mesh</dt><dd>1.0 m, 10 elements</dd>
+        <dt>BC</dt><dd>node 0 fully fixed</dd>
+        <dt>Load</dt><dd>F<sub>z</sub> = −1000 N at node 10 (tip)</dd>
+      </dl>
+
+      <h3 style="margin-top:1rem;">Analytical solution</h3>
+      <div class="formula"><span class="lbl">u<sub>z</sub>(L) =</span> F<sub>z</sub>·L³/(3·E·I<sub>z</sub>) + F<sub>z</sub>·L/(κ·G·A) = −2.01508 × 10⁻⁴ m</div>
+      <div class="formula"><span class="lbl"> </span> = −2.00008 × 10⁻⁴ (bending) − 1.5 × 10⁻⁶ (shear)</div>
+      <div class="formula"><span class="lbl">θ<sub>y</sub>(L) =</span> F<sub>z</sub>·L²/(2·E·I<sub>z</sub>) = −3.00012 × 10⁻⁴ rad</div>
+
+      <h3 style="margin-top:1rem;">Results</h3>
+      <table>
+        <thead><tr><th>Quantity</th><th>Analytical</th><th>FEM</th><th>Rel. error</th></tr></thead>
+        <tbody>
+          <tr><td>u<sub>z</sub>(L)</td><td class="num">−2.01508e−4</td><td class="num">−2.01508e−4</td><td class="err-ok">&lt; 1e−9</td></tr>
+          <tr><td>θ<sub>y</sub>(L)</td><td class="num">−3.00012e−4</td><td class="num">−3.00012e−4</td><td class="err-ok">&lt; 1e−9</td></tr>
+          <tr><td>u<sub>x</sub>(L)</td><td class="num">0</td><td class="num">0</td><td class="err-ok">abs &lt; 1e−14</td></tr>
+          <tr><td>NR iterations</td><td class="num">1</td><td class="num">1</td><td class="err-ok">exact</td></tr>
+          <tr><td>Shear contribution</td><td colspan="3" class="num">0.74% of total tip deflection (small but resolved at 1e−9)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="panel">
+      <h3>Bending vs shear contributions</h3>
+      <div class="svg-wrap">
+        <svg viewBox="0 0 600 240" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace, monospace" font-size="11">
+          <defs>
+            <pattern id="hatchT1" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)">
+              <line x1="0" y1="0" x2="0" y2="6" stroke="#475569" stroke-width="1.2"/>
+            </pattern>
+            <marker id="arrDnT1" viewBox="0 0 10 10" refX="5" refY="9" markerWidth="9" markerHeight="9" orient="auto">
+              <path d="M 0 0 L 5 10 L 10 0 z" fill="#ea580c"/>
+            </marker>
+          </defs>
+
+          <!-- Fixed support -->
+          <rect x="40" y="60" width="22" height="120" fill="url(#hatchT1)" stroke="#475569" stroke-width="1.2"/>
+          <line x1="62" y1="60" x2="62" y2="180" stroke="#475569" stroke-width="2"/>
+
+          <!-- Undeformed reference -->
+          <line x1="62" y1="120" x2="500" y2="120" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4 3"/>
+
+          <!-- Two superposed curves: bending only (EB) vs Timoshenko (bend + shear) -->
+          <!-- EB cantilever w = -2e-4 * (3 x^2 L - x^3) / (2 L^3), scaled vertically by 200000 -->
+          <path d="M 62,120 L 105,121 L 149,124 L 192,128 L 236,134 L 280,142 L 323,151 L 367,162 L 410,174 L 454,187 L 500,200"
+                stroke="#2563eb" stroke-width="2.2" fill="none"/>
+          <!-- Timoshenko: bending term + linearly increasing shear contribution -->
+          <path d="M 62,120 L 105,121.7 L 149,125 L 192,129.5 L 236,136 L 280,144.3 L 323,153.7 L 367,165.2 L 410,177.5 L 454,191 L 500,203"
+                stroke="#dc2626" stroke-width="2.4" fill="none"/>
+
+          <!-- Force arrow at tip -->
+          <line x1="500" y1="100" x2="500" y2="225" stroke="#ea580c" stroke-width="2.5" marker-end="url(#arrDnT1)"/>
+          <text x="510" y="205" fill="#ea580c" font-weight="600" font-size="10">F<tspan baseline-shift="-3" font-size="9">z</tspan> = −1000 N</text>
+
+          <!-- Legend -->
+          <rect x="70" y="42" width="14" height="3" fill="#2563eb"/>
+          <text x="90" y="46" font-size="10" fill="#2563eb">EB:  u<tspan baseline-shift="-3" font-size="9">z</tspan> = −2.00e−4 m  (bending only)</text>
+          <rect x="70" y="60" width="14" height="3" fill="#dc2626"/>
+          <text x="90" y="64" font-size="10" fill="#dc2626">Timoshenko:  u<tspan baseline-shift="-3" font-size="9">z</tspan> = −2.015e−4 m  (bend + shear)</text>
+
+          <text x="220" y="115" fill="#94a3b8" font-size="10" font-style="italic">undeformed (L = 1 m)</text>
+          <text x="510" y="100" fill="#dc2626" font-size="10">tip</text>
+        </svg>
+      </div>
+      <div class="scale-note">vertical scale ×200,000; the Timoshenko curve sits below EB by the linear shear term</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- TEST 2: DEEP BEAM -->
+<!-- ============================================================ -->
+<section class="test-card">
+  <div class="test-header">
+    <div class="left">
+      <h2 class="test-title">Deep-beam shear ratio (L/h = 4)</h2>
+      <span class="test-id">test_timo2d_deep_beam.cpp</span>
+      <span class="badge new">NEW</span>
+      <span class="badge key">KEY</span>
+    </div>
+    <span class="badge pass">PASS</span>
+  </div>
+  <p class="test-summary">Quantitative deep-beam comparison: for a tip-loaded cantilever the analytical ratio is <code>u<sub>z</sub><sup>Timo</sup> / u<sub>z</sub><sup>EB</sup> = 1 + 3 EI / (κGA L²)</code>. With a rectangular section h = L/4 and κ = 5/6, the predicted ratio is <code>1.04875</code> (4.875% shear contribution). The Timoshenko element must hit this ratio to relative 1e−9 — proving the shear contribution is captured both qualitatively and quantitatively.</p>
+
+  <div class="test-body">
+    <div class="panel">
+      <h3>Setup</h3>
+      <dl class="params">
+        <dt>Section</dt><dd>rectangular b × h, h = L/4 (very deep)</dd>
+        <dt>L, b, h</dt><dd>1.0, 0.05, 0.25 m</dd>
+        <dt>E, ν</dt><dd>200 × 10⁹ Pa, 0.3</dd>
+        <dt>G</dt><dd>E / (2(1+ν)) = 76.92 × 10⁹ Pa</dd>
+        <dt>κ<sub>z</sub></dt><dd>5/6</dd>
+        <dt>Mesh</dt><dd>10 elements (same for both EB2D and Timoshenko)</dd>
+        <dt>Load</dt><dd>F<sub>z</sub> = −1000 N at tip</dd>
+      </dl>
+
+      <h3 style="margin-top:1rem;">Analytical ratio</h3>
+      <div class="formula"><span class="lbl">ratio =</span> 1 + 3·E·I<sub>z</sub> / (κ·G·A·L²) = 1.048750</div>
+
+      <h3 style="margin-top:1rem;">Results</h3>
+      <table>
+        <thead><tr><th>Quantity</th><th>Value</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>EB2D tip u<sub>z</sub></td><td class="num">−2.560 × 10⁻⁵ m</td><td>bending only</td></tr>
+          <tr><td>Timoshenko tip u<sub>z</sub></td><td class="num">−2.6848 × 10⁻⁵ m</td><td>bend + shear</td></tr>
+          <tr><td>Ratio (numeric)</td><td class="num">1.048750</td><td class="err-ok">matches analytical 1.048750</td></tr>
+          <tr><td>Relative error vs analytical ratio</td><td class="num">&lt; 1e−9</td><td class="err-ok">PASS</td></tr>
+          <tr><td>Shear contribution</td><td colspan="2" class="num">4.65% of total</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="panel">
+      <h3>Why deep beams need shear</h3>
+      <div class="svg-wrap">
+        <svg viewBox="0 0 600 260" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace, monospace" font-size="11">
+          <defs>
+            <marker id="dnT2" viewBox="0 0 10 10" refX="5" refY="9" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 5 10 L 10 0 z" fill="#ea580c"/>
+            </marker>
+          </defs>
+
+          <!-- Beam silhouette: stubby (L=1, h=0.25, drawn at L=400px, h=100px) -->
+          <rect x="60" y="80" width="20" height="100" fill="#475569" stroke="#0f172a" stroke-width="1.2"/>
+          <rect x="80" y="80" width="400" height="100" fill="#dbeafe" stroke="#1e3a8a" stroke-width="1.5"/>
+
+          <!-- Tip force arrow -->
+          <line x1="490" y1="80" x2="490" y2="215" stroke="#ea580c" stroke-width="2.5" marker-end="url(#dnT2)"/>
+          <text x="500" y="200" fill="#ea580c" font-weight="600" font-size="10">F<tspan baseline-shift="-3" font-size="9">z</tspan></text>
+
+          <!-- L/h annotation -->
+          <line x1="80" y1="195" x2="480" y2="195" stroke="#475569" stroke-width="1" marker-start="url(#dnT2)" marker-end="url(#dnT2)"/>
+          <text x="265" y="208" fill="#475569" font-size="11">L = 1 m</text>
+          <line x1="495" y1="80" x2="495" y2="180" stroke="#475569" stroke-width="1"/>
+          <text x="510" y="135" fill="#475569" font-size="11">h = L/4</text>
+
+          <!-- Shear deformation indication: cross-section rotation does NOT match slope -->
+          <text x="120" y="35" fill="#0f172a" font-weight="600">Shear-deformable kinematics</text>
+          <text x="120" y="52" fill="#475569" font-size="10">cross-sections tilt by θ_y, but NOT by du_z/dx</text>
+          <text x="120" y="245" fill="#7c3aed" font-size="11" font-weight="600">γ = du_z/dx − θ_y  ≠  0  (deep beam)</text>
+        </svg>
+      </div>
+    </div>
+  </div>
+
+  <div class="note">
+    <strong>Why this is the key test.</strong> The cantilever and slender-limit tests could in principle pass on a Timoshenko element with a sign error in the shear term — Φ being small enough that the bending term still dominates. This deep-beam test pins the shear-flexibility magnitude to 4 significant figures of agreement (ratio 1.04875), making any subtle constitutive error visible at the 1e−9 level.
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- TEST 3: SLENDER LIMIT -->
+<!-- ============================================================ -->
+<section class="test-card">
+  <div class="test-header">
+    <div class="left">
+      <h2 class="test-title">Slender-beam limit (L/h = 1000)</h2>
+      <span class="test-id">test_timo2d_slender_limit.cpp</span>
+      <span class="badge new">NEW</span>
+    </div>
+    <span class="badge pass">PASS</span>
+  </div>
+  <p class="test-summary">For a very slender beam (L/h = 1000) on a well-refined mesh (40 elements), the Timoshenko tip deflection must converge to EB. This is the <strong>Timoshenko → EB</strong> consistency check required by PROJECT_SPEC §13.6.</p>
+
+  <div class="test-body">
+    <div class="panel">
+      <h3>Setup &amp; expected behavior</h3>
+      <dl class="params">
+        <dt>L, h, b</dt><dd>1.0, 1×10⁻³, 0.01 m (extreme slenderness)</dd>
+        <dt>Mesh</dt><dd>40 elements (well refined)</dd>
+        <dt>Load</dt><dd>F<sub>z</sub> = −1 N (small load for highly flexible beam)</dd>
+        <dt>Expected shear contribution</dt><dd>≈ 3·EI/(κ·G·A·L²) ≈ 7.8 × 10⁻⁷ of total</dd>
+      </dl>
+
+      <h3 style="margin-top:1rem;">Results</h3>
+      <table>
+        <thead><tr><th>Quantity</th><th>Value</th><th>Tol</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>u<sub>z</sub><sup>EB</sup>(L)</td><td class="num">−2.000 m</td><td>—</td><td class="err-ok">reference</td></tr>
+          <tr><td>u<sub>z</sub><sup>Timo</sup>(L)</td><td class="num">−2.000... m</td><td>—</td><td class="err-ok">matches</td></tr>
+          <tr><td>|Δu<sub>z</sub>/u<sub>z</sub>|</td><td class="num">7.80 × 10⁻⁷</td><td class="num">1 × 10⁻⁶</td><td class="err-ok">PASS</td></tr>
+          <tr><td>Shear-fraction prediction</td><td class="num">7.80 × 10⁻⁷</td><td>—</td><td class="err-ok">matches measured</td></tr>
+        </tbody>
+      </table>
+
+      <p class="test-summary" style="margin-top:0.6rem;">The relative difference equals the analytical shear-fraction prediction to 3 significant figures, confirming both Timoshenko and EB are solving the correct problems and that Timoshenko is approaching the EB result by exactly the amount it should.</p>
+    </div>
+
+    <div class="panel">
+      <h3>Convergence picture</h3>
+      <div class="svg-wrap" style="padding:0.8rem 1rem; font-size:0.85rem; line-height:1.55;">
+        <p style="margin:0;"><strong>Slender limit asymptotics.</strong></p>
+        <p style="margin:0.4rem 0;">For a tip-loaded cantilever, the relative shear contribution is</p>
+        <p style="margin:0.2rem 0; font-family:var(--mono);">&nbsp;&nbsp;u<sub>shear</sub> / u<sub>bend</sub> &nbsp;=&nbsp; 3 E I / (κ G A L²)</p>
+        <p style="margin:0.4rem 0;">For a rectangular cross-section with κ = 5/6, ν = 0.3:</p>
+        <p style="margin:0.2rem 0; font-family:var(--mono);">&nbsp;&nbsp;= 0.65 / κ · (h/L)² &nbsp;=&nbsp; 0.78 · (h/L)²</p>
+        <p style="margin:0.4rem 0;">At L/h = 1000: 0.78 × 10⁻⁶ — exactly the measured relative difference.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- TEST 4: SHEAR LOCKING -->
+<!-- ============================================================ -->
+<section class="test-card">
+  <div class="test-header">
+    <div class="left">
+      <h2 class="test-title">Shear-locking check (L/h = 1000, coarse mesh)</h2>
+      <span class="test-id">test_timo2d_shear_locking.cpp</span>
+      <span class="badge new">NEW</span>
+      <span class="badge key">KEY</span>
+    </div>
+    <span class="badge pass">PASS</span>
+  </div>
+  <p class="test-summary">The decisive test for the locking-free claim. Same extreme slenderness as the slender-limit test (L/h = 1000), but with only <strong>4 elements</strong> instead of 40. A locking element would be over-stiff by orders of magnitude here; the Φ-corrected closed form must still match the analytical solution to relative ~1e−15.</p>
+
+  <div class="test-body">
+    <div class="panel">
+      <h3>Setup &amp; criterion</h3>
+      <dl class="params">
+        <dt>L/h</dt><dd>1000 (extreme slenderness)</dd>
+        <dt>Mesh</dt><dd>only 4 elements — intentionally coarse</dd>
+        <dt>Φ at this geometry</dt><dd>≈ 5.5 × 10⁻⁶ per element (small)</dd>
+        <dt>Locking-failure signature</dt><dd>FEM/analytical ≪ 1 (e.g. 1e−3 or worse)</dd>
+        <dt>Acceptance</dt><dd>relative error vs analytical &lt; 1 × 10⁻⁶</dd>
+      </dl>
+
+      <h3 style="margin-top:1rem;">Results</h3>
+      <table>
+        <thead><tr><th>Quantity</th><th>Value</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>Analytical u<sub>z</sub>(L)</td><td class="num">−2.000... m</td><td>reference</td></tr>
+          <tr><td>FEM u<sub>z</sub>(L) (4 elems)</td><td class="num">−2.000... m</td><td class="err-ok">matches</td></tr>
+          <tr><td>Relative error</td><td class="num">6.66 × 10⁻¹⁶</td><td class="err-ok">floating-point noise</td></tr>
+          <tr><td>FEM / analytical ratio</td><td class="num">1.000000000000000</td><td class="err-ok">no locking</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="panel">
+      <h3>Why this matters</h3>
+      <div class="svg-wrap" style="padding:0.8rem 1rem; font-size:0.85rem; line-height:1.55;">
+        <p style="margin:0;"><strong>Shear locking in two-node Timoshenko elements.</strong></p>
+        <p style="margin:0.4rem 0;">Naive low-order C⁰ interpolation (linear u<sub>z</sub>, linear θ<sub>y</sub>) produces an element whose <em>spurious</em> shear strain energy grows as κGA/L². For very slender beams the genuine bending energy ∼ EI/L³ becomes negligible compared to the spurious shear term, so the deflection collapses by orders of magnitude.</p>
+        <p style="margin:0.4rem 0;">The Φ-corrected closed-form element uses the <strong>exact homogeneous-solution shape functions</strong> of the Timoshenko equations. These continuously interpolate the EB Hermite functions in the slender limit and produce no spurious shear energy. With 4 elements at L/h = 1000 the result is correct to floating-point precision.</p>
+        <p style="margin:0.4rem 0; color:#16a34a;"><strong>Verified locking-free.</strong></p>
+      </div>
+    </div>
+  </div>
+
+  <div class="note">
+    <strong>Why no EAS or SRI.</strong> Enhanced assumed strain (EAS) and selective reduced integration (SRI) are alternative locking-free techniques requiring extra implementation machinery and care around mode counts. The Φ-corrected closed form has no extra DOFs, no quadrature subtleties, and produces the analytical answer exactly in the slender limit — appropriate for a teaching-oriented Phase 1 library.
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- TEST 5: PHI LIMIT -->
+<!-- ============================================================ -->
+<section class="test-card">
+  <div class="test-header">
+    <div class="left">
+      <h2 class="test-title">Φ → 0 element-level degeneration to EB2D</h2>
+      <span class="test-id">test_timo2d_phi_limit.cpp</span>
+      <span class="badge new">NEW</span>
+    </div>
+    <span class="badge pass">PASS</span>
+  </div>
+  <p class="test-summary">Direct element-level comparison: choose geometry / material so Φ ≈ 1×10⁻⁹, then assert that every nonzero entry of Timoshenko's <code>ke</code> matches the corresponding EB2D <code>ke</code> entry. Catches wrong Φ algebra, wrong κ source, misplaced <code>(1+Φ)</code> denominators, and sign errors on <code>(2−Φ)</code>.</p>
+
+  <div class="test-body">
+    <div class="panel">
+      <h3>Setup</h3>
+      <dl class="params">
+        <dt>E, G</dt><dd>200 × 10⁹, 80 × 10⁹ Pa</dd>
+        <dt>A, I<sub>z</sub></dt><dd>1.0 m², 1 × 10⁻³ m⁴</dd>
+        <dt>κ<sub>z</sub></dt><dd>5/6</dd>
+        <dt>L</dt><dd>6000 m (extreme) → Φ ≈ 1 × 10⁻⁹</dd>
+      </dl>
+
+      <h3 style="margin-top:1rem;">Checks</h3>
+      <table>
+        <thead><tr><th>Check</th><th>Tol</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>Φ value</td><td class="num">~ 1 × 10⁻⁹</td><td class="err-ok">verified</td></tr>
+          <tr><td>All 36 ke entries vs EB2D</td><td class="num">rel &lt; 1 × 10⁻⁷</td><td class="err-ok">PASS</td></tr>
+          <tr><td>(2,5) sign behaves as (2−Φ), not (2+Φ)</td><td>—</td><td class="err-ok">verified at moderate Φ</td></tr>
+          <tr><td>ke(2,5) &lt; 2EI/L for Φ &gt; 0</td><td>—</td><td class="err-ok">strict</td></tr>
+        </tbody>
+      </table>
+
+      <p class="test-summary" style="margin-top:0.6rem;">The (2,5) sign sub-check is the most discriminating: replacing <code>(2−Φ)</code> with <code>(2+Φ)</code> would still give the correct EB limit at Φ=0 but would predict the wrong direction for the off-diagonal term at any nonzero Φ. A second, separate moderate-Φ comparison catches this.</p>
+    </div>
+
+    <div class="panel">
+      <h3>Φ-corrected vs EB bending block</h3>
+      <div class="svg-wrap" style="padding:0.8rem 1rem; font-size:0.85rem; line-height:1.55; font-family:var(--mono);">
+        <p style="margin:0;"><strong>Timoshenko (general Φ):</strong></p>
+        <p style="margin:0.2rem 0;">&nbsp;&nbsp;K<sub>b</sub> = EI / (L³(1+Φ)) ·</p>
+        <p style="margin:0;">&nbsp;&nbsp;[ 12&nbsp;&nbsp;&nbsp;&nbsp;6L&nbsp;&nbsp;&nbsp;−12&nbsp;&nbsp;&nbsp;6L&nbsp;&nbsp;&nbsp; ]</p>
+        <p style="margin:0;">&nbsp;&nbsp;[ 6L&nbsp;&nbsp;&nbsp;(4+Φ)L²&nbsp;−6L&nbsp;(2−Φ)L² ]</p>
+        <p style="margin:0;">&nbsp;&nbsp;[−12&nbsp;&nbsp;−6L&nbsp;&nbsp;&nbsp;12&nbsp;&nbsp;&nbsp;−6L&nbsp;&nbsp;&nbsp; ]</p>
+        <p style="margin:0;">&nbsp;&nbsp;[ 6L&nbsp;&nbsp;&nbsp;(2−Φ)L²&nbsp;−6L&nbsp;(4+Φ)L² ]</p>
+        <p style="margin:0.7rem 0 0.2rem 0;"><strong>EB limit (Φ → 0):</strong></p>
+        <p style="margin:0.2rem 0;">&nbsp;&nbsp;K<sub>b</sub> = EI / L³ · [12, 6L, −12, 6L; 6L, 4L², −6L, 2L²; …]</p>
+        <p style="margin:0.7rem 0 0.2rem 0; color:#16a34a;"><strong>Identical to EB2D's Hermite block.</strong></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- TEST 6: MASS -->
+<!-- ============================================================ -->
+<section class="test-card">
+  <div class="test-header">
+    <div class="left">
+      <h2 class="test-title">Mass matrix (rotary inertia delta)</h2>
+      <span class="test-id">test_timo2d_mass.cpp</span>
+      <span class="badge new">NEW</span>
+    </div>
+    <span class="badge pass">PASS</span>
+  </div>
+  <p class="test-summary">Direct local-mass verification + the <strong>Timoshenko–EB2D mass delta</strong> check: the only difference between Timoshenko and EB mass must be exactly <code>ρ·I<sub>z</sub>·L/6 · [[2,1],[1,2]]</code> on the θ<sub>y</sub> DOFs, zero elsewhere. Plus transformed mass coverage on a vertical element.</p>
+
+  <div class="test-body" style="grid-template-columns: 1fr;">
+    <div class="panel">
+      <h3>Sub-tests</h3>
+      <div class="subtest-grid">
+        <div class="subtest">
+          <div class="top">
+            <span class="name">6.1 Single horizontal element</span>
+            <span class="badge pass sm">PASS</span>
+          </div>
+          <div class="desc">Direct entry-by-entry verification of every nonzero local mass term: axial (2,1) pattern, Hermite translational, plus the (2,2)/(2,5)/(5,5) entries that combine Hermite-translational + rotary inertia. Tolerance: relative 1e−12. Plus the explicit delta-vs-EB2D check on every entry of the 6×6 matrix.</div>
+        </div>
+        <div class="subtest">
+          <div class="top">
+            <span class="name">6.2 Vertical element (transformed)</span>
+            <span class="badge pass sm">PASS</span>
+          </div>
+          <div class="desc">Beam along +z, λ ≠ I. After <code>T<sup>T</sup>M<sub>l</sub>T</code>: local axial mass maps to global u<sub>z</sub> diagonal, local Hermite transverse mass maps to global u<sub>x</sub> diagonal, and the θ<sub>y</sub> diagonal includes the full Timoshenko value (Hermite + rotary). Verifies the rotary inertia survives transformation.</div>
+        </div>
+      </div>
+
+      <h3 style="margin-top:1rem;">Key Timoshenko–EB delta entries</h3>
+      <table>
+        <thead><tr><th>Entry</th><th>EB2D value</th><th>Timoshenko delta</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>M(0,0), M(3,3) axial</td><td class="num">2 ρAL/6</td><td class="num">0 (unchanged)</td><td class="err-ok">match</td></tr>
+          <tr><td>M(1,1), M(4,4) u<sub>z</sub>-u<sub>z</sub></td><td class="num">156 ρAL/420</td><td class="num">0 (unchanged)</td><td class="err-ok">match</td></tr>
+          <tr><td>M(2,2), M(5,5) θ<sub>y</sub>-θ<sub>y</sub></td><td class="num">4 L² ρAL/420</td><td class="num"><strong>+ 2 ρ I<sub>z</sub> L / 6</strong></td><td class="err-ok">rotary inertia</td></tr>
+          <tr><td>M(2,5) θ<sub>yA</sub>-θ<sub>yB</sub></td><td class="num">−3 L² ρAL/420</td><td class="num"><strong>+ ρ I<sub>z</sub> L / 6</strong></td><td class="err-ok">rotary inertia</td></tr>
+          <tr><td>all other entries</td><td>—</td><td class="num">0 (unchanged)</td><td class="err-ok">match</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="note info">
+    <strong>Mass-matrix strategy.</strong> Timoshenko 2D uses consistent translational Hermite mass (same as EB2D) plus explicit rotary inertia <code>ρ·I<sub>z</sub>·L/6 · [[2,1],[1,2]]</code> on θ<sub>y</sub> via linear shape functions. PROJECT_SPEC §3.4 requires rotary inertia for Timoshenko mass; without it any modal / dynamic analysis would miss the rotational kinetic energy contribution. The fully-consistent Friedman–Kosmatka Φ-dependent mass is more elaborate and is deliberately deferred to a later batch — for slender-to-moderate beams the rotary-inertia delta is the dominant Timoshenko correction.
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- Build / run info -->
+<!-- ============================================================ -->
+<section class="test-card" style="background: #f1f5f9;">
+  <h2 class="test-title" style="font-size:1.1rem;">Build &amp; run summary</h2>
+  <div class="test-body">
+    <div class="panel">
+      <h3>Build</h3>
+      <table>
+        <tbody>
+          <tr><td>CMake</td><td class="num">3.16+</td></tr>
+          <tr><td>Compiler</td><td class="num">GCC 15.2.0 (MSYS2 UCRT64)</td></tr>
+          <tr><td>C++ standard</td><td class="num">C++17</td></tr>
+          <tr><td>Eigen</td><td class="num">3.4.0 (header-only)</td></tr>
+          <tr><td>Warnings</td><td class="err-ok">0</td></tr>
+          <tr><td>New source file</td><td>Element/Timoshenko2D.h</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="panel">
+      <h3>CTest output (full 21 tests)</h3>
+      <pre style="background:#0f172a; color:#e2e8f0; padding:0.8rem 1rem; border-radius:6px; font-size:0.78rem; line-height:1.4; overflow-x:auto;">Test project C:/_Lucidia/Japhy/BeamLib/build
+ 1/21 Test #1:  test_compile_check ............ Passed
+ 2/21 Test #2:  test_eb2d_cantilever .......... Passed
+ 3/21 Test #3:  test_eb2d_patch ............... Passed
+ 4/21 Test #4:  test_eb2d_moment .............. Passed
+ 5/21 Test #5:  test_eb2d_postprocess ......... Passed
+ 6/21 Test #6:  test_eb2d_simply_supported .... Passed
+ 7/21 Test #7:  test_eb2d_rotated_beam ........ Passed
+ 8/21 Test #8:  test_eb2d_settlement .......... Passed
+ 9/21 Test #9:  test_eb2d_mass ................ Passed
+10/21 Test #10: test_eb3d_cantilever .......... Passed
+11/21 Test #11: test_eb3d_torsion ............. Passed
+12/21 Test #12: test_eb3d_transform ........... Passed
+13/21 Test #13: test_eb2d_eb3d_crosscheck ..... Passed
+14/21 Test #14: test_eb3d_rigid_body .......... Passed
+15/21 Test #15: test_eb3d_mass ................ Passed
+16/21 Test #16: test_timo2d_cantilever ........ Passed  &lt;-- new
+17/21 Test #17: test_timo2d_deep_beam ......... Passed  &lt;-- new (key)
+18/21 Test #18: test_timo2d_slender_limit ..... Passed  &lt;-- new
+19/21 Test #19: test_timo2d_shear_locking ..... Passed  &lt;-- new (key)
+20/21 Test #20: test_timo2d_phi_limit ......... Passed  &lt;-- new
+21/21 Test #21: test_timo2d_mass .............. Passed  &lt;-- new
+
+100% tests passed, 0 tests failed out of 21</pre>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <p>Generated alongside the Timoshenko 2D theory PDF at <code>docs/theory/03_timoshenko_2d.pdf</code> and the unified manual at <code>docs/theory/beam_theory_manual.pdf</code> (Chapter 4). All numerical values come from actual runs of the test executables. The deep-beam ratio 1.04875 and the shear-locking ratio 1.000000000000000 are taken verbatim from the test outputs; the Codex review of this batch concluded with no findings.</p>
+</footer>
+
+</div>
+</body>
+</html>

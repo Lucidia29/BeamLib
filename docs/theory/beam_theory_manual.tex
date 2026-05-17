@@ -1,13 +1,14 @@
 % BeamLib Theory Manual — unified reference covering all beam elements
-% implemented so far (Phase 1, Batches 1--3).
+% implemented so far (Phase 1, Batches 1--4).
 %
 % Build:  pdflatex beam_theory_manual.tex   (run twice for TOC + refs)
 %
 % The per-batch deep-dive chapters
 %     01_euler_bernoulli_2d.tex   (EB2D, Batches 2A / 2B)
 %     02_euler_bernoulli_3d.tex   (EB3D, Batch 3)
+%     03_timoshenko_2d.tex        (Timoshenko 2D, Batch 4)
 % remain authoritative for the full derivations and pitfall lists. This
-% manual is the unified, self-contained entry point that ties the two
+% manual is the unified, self-contained entry point that ties the
 % elements together through their common framework.
 
 \documentclass[11pt,a4paper]{book}
@@ -40,7 +41,7 @@
 \newcommand{\lam}{\bmath{\lambda}}
 
 \title{BeamLib Theory Manual\\
-\large Phase 1, Batches 1--3 (EB2D + EB3D)}
+\large Phase 1, Batches 1--4 (EB2D + EB3D + Timoshenko 2D)}
 \author{BeamLib Development Team}
 \date{\today}
 
@@ -53,18 +54,19 @@
 
 \section*{Purpose}
 
-This manual gives the unified theoretical foundation for the beam elements implemented in BeamLib Phase~1 so far: the planar Euler--Bernoulli (EB2D) element from Batches~2A/2B, and the spatial Euler--Bernoulli (EB3D) element from Batch~3. It is intended as a single reference that a reader can read end-to-end to understand the kinematic assumptions, sign conventions, finite-element formulation, coordinate transformations, mass-matrix strategy, and verification framework that all current BeamLib elements share.
+This manual gives the unified theoretical foundation for the beam elements implemented in BeamLib Phase~1 so far: the planar Euler--Bernoulli (EB2D) element from Batches~2A/2B, the spatial Euler--Bernoulli (EB3D) element from Batch~3, and the planar Timoshenko (Timo2D) element from Batch~4. It is intended as a single reference that a reader can read end-to-end to understand the kinematic assumptions, sign conventions, finite-element formulation, coordinate transformations, mass-matrix strategy, and verification framework that all current BeamLib elements share.
 
 \section*{Scope versus per-batch chapters}
 
-Two batch-level theory documents already exist and remain authoritative for the full derivations and the complete formula-to-C++ index tables:
+Three batch-level theory documents already exist and remain authoritative for the full derivations and the complete formula-to-C++ index tables:
 
 \begin{itemize}
     \item \texttt{docs/theory/01\_euler\_bernoulli\_2d.tex} --- EB2D (Batches~2A/2B). Full Hermite block derivation, internal-force sign mapping, settlement / RHS-correction proof, rotated-beam acceptance criteria.
     \item \texttt{docs/theory/02\_euler\_bernoulli\_3d.tex} --- EB3D (Batch~3). 12$\times$12 stiffness and mass matrices, $\Sdiag\lam\Sdiag$ rotation-transformation derivation, fallback-frame algorithm, transformation verification by 3D rigid-body patch test.
+    \item \texttt{docs/theory/03\_timoshenko\_2d.tex} --- Timoshenko 2D (Batch~4). $\Phi$-corrected closed-form 2-node stiffness derivation, locking-free justification, mass model with explicit rotary inertia, EB limit cross-check.
 \end{itemize}
 
-This unified manual condenses both, with cross-references back to the per-batch chapters when finer detail is needed. Anything the unified manual states is either re-derived here or cited to the corresponding section in the per-batch chapter.
+This unified manual condenses all three, with cross-references back to the per-batch chapters when finer detail is needed. Anything the unified manual states is either re-derived here or cited to the corresponding section in the per-batch chapter.
 
 \section*{Notation}
 
@@ -87,12 +89,13 @@ $\lam$                    & 3$\times$3 frame rotation, rows $(\xhatl, \yhatl, \z
 $\Sdiag$                  & $\mathrm{diag}(1, -1, 1)$ structural-RH sign adapter \\
 $\theta_i$                & BeamLib-stored rotation DOF (structural convention) \\
 $\Omega_i$                & physical RH-rule rotation pseudovector \\
+$\Phi$                    & Timoshenko shear-bending ratio $12 E I / (\kappa GA L^2)$ \\
 \bottomrule
 \end{tabular}
 
 \section*{Reading guide}
 
-Chapter~\ref{ch:framework} sets the language for both elements: DOF ordering, sign conventions, residual semantics, transformation philosophy, assembly flow. Chapters~\ref{ch:eb2d} and~\ref{ch:eb3d} apply that language to each element with self-contained derivations of the element-specific stiffness and mass matrices and the verification cases. Appendix~\ref{app:tests} catalogs the implemented unit tests.
+Chapter~\ref{ch:framework} sets the language for every element: DOF ordering, sign conventions, residual semantics, transformation philosophy, assembly flow, mass strategy. Chapters~\ref{ch:eb2d}, \ref{ch:eb3d}, and~\ref{ch:timo2d} apply that language to EB2D, EB3D, and Timoshenko~2D respectively, with self-contained derivations of the element-specific stiffness and mass matrices and the verification cases. Appendix~\ref{app:tests} catalogs the implemented unit tests.
 
 \mainmatter
 
@@ -264,7 +267,8 @@ Both EB2D and EB3D use these blocks; only the moment of inertia and the embeddin
 \begin{itemize}[leftmargin=*]
     \item \textbf{EB2D}: consistent translational mass on $u_x$ (linear) + Hermite mass on $(u_z, \theta_y)$. No rotary inertia. PROJECT\_SPEC \S3.4.
     \item \textbf{EB3D}: consistent translational mass on $u_x$, $u_y$, $u_z$ + Hermite mass on the two bending planes + \emph{required} torsional rotary inertia $\rho I_x L/6 \cdot [[2,1],[1,2]]$ on $\theta_x$. Bending rotary inertia is excluded (standard EB practice; the diagonal entries $4L^2\,\rho A L/420$ on $\theta_y$, $\theta_z$ are not rotary inertia but Hermite shape-function self-coupling of the translational mass).
-    \item \textbf{Future Timoshenko (Batches~4/5)}: will add bending rotary inertia $\rho I$.
+    \item \textbf{Timoshenko 2D (Batch~4)}: consistent translational mass on $u_x$ + Hermite translational mass on $(u_z, \theta_y)$ (identical to EB2D for those entries) + explicit \emph{bending rotary inertia} $\rho I_z L / 6 \cdot [[2,1],[1,2]]$ on $\theta_y$ via linear shape functions. The Timoshenko--EB2D mass delta is exactly this $2\times 2$ rotary block on the $\theta_y$ DOFs. Required for any meaningful Timoshenko dynamic / modal analysis (PROJECT\_SPEC \S3.4).
+    \item \textbf{Future Timoshenko 3D (Batch~5)}: will extend the 2D rotary inertia to both bending planes.
     \item \textbf{Future GE (Batches~6/7)}: mass strategy pending the GE theory document. Consistent mass is required for implicit dynamics and modal analysis; lumped mass was used by the reference C++ explicit-dynamics implementation only.
 \end{itemize}
 
@@ -439,11 +443,108 @@ See \S\ref{sec:slambdaSlambdaS}. The rigid-body patch test \texttt{test\_eb3d\_r
 
 The Phase~1 \texttt{ElementInternalForces} struct (used by EB2D) exposes only $\{N, V_z, M_y\}$. Extending it to the full 3D set $\{N, V_y, V_z, T, M_y, M_z\}$ is deferred to a later batch. The current EB3D \texttt{computeInternalForces} stub fills $\{N, V_z, M_y\}$ using the same sign mapping as EB2D; $V_y$, $M_z$, $T$ are explicitly out of scope until the struct is extended. No Batch~3 test reads internal forces. The torsion reaction test reaches the answer through \texttt{computeReactions}, which uses the full element residual instead of these per-cross-section quantities.
 
+\chapter{Timoshenko 2D Beam (Timo2D)}\label{ch:timo2d}
+
+This chapter is the unified summary of Timoshenko~2D; the full closed-form derivation, locking analysis, and the entry-by-entry stiffness / mass tables are in \texttt{docs/theory/03\_timoshenko\_2d.tex}.
+
+\section{Scope}
+
+Planar shear-deformable beam in the $xz$-plane. Uses the same DOF order $[u_x, u_z, \theta_y]$ as EB2D and the same BeamLib structural sign convention. Suitable for general slenderness ratios; reduces exactly to EB2D in the slender limit (verified). Sets up the framework that Timoshenko 3D (Batch~5) will extend to two bending planes plus torsion.
+
+\section{Kinematics and strain}
+
+Timoshenko relaxes the EB orthogonality assumption: cross-section normals no longer remain perpendicular to the deformed beam axis. The kinematic field is
+\[
+u(x, z) = u_x(x) - z\,\theta_y(x), \qquad w(x, z) = u_z(x),
+\]
+with three independent fields. The three strain measures are
+\begin{itemize}
+    \item axial: $\varepsilon_x = u_x' - z\,\theta_y'$,
+    \item bending curvature: $\kappa = \theta_y'$ (note: $\theta_y'$, not $u_z''$),
+    \item transverse shear: $\gamma_{xz} = u_z' - \theta_y$.
+\end{itemize}
+EB enforces $\gamma_{xz} \equiv 0$, recovering $\theta_y = u_z'$; Timoshenko admits a nonzero $\gamma_{xz}$ resisted by shear stiffness $\kappa GA$. The strain energy density is
+\[
+\tfrac{1}{2}\,EA\,(u_x')^2 \;+\; \tfrac{1}{2}\,EI\,(\theta_y')^2 \;+\; \tfrac{1}{2}\,\kappa GA\,(u_z' - \theta_y)^2,
+\]
+with $I = I_z$ (\texttt{props.Iz}) and $\kappa = \kappa_z$ (\texttt{props.kappa()}).
+
+\section{The \texorpdfstring{$\Phi$}{Phi}-corrected closed-form stiffness}
+
+Define
+\[
+\boxed{\;\Phi = \dfrac{12\,EI}{\kappa GA\,L^2}.\;}
+\]
+$\Phi$ is small for slender / shear-stiff beams and large for deep / shear-soft beams. The locking-free 2-node bending/shear stiffness in DOF order $(u_{zA}, \theta_{yA}, u_{zB}, \theta_{yB})$ is
+\[
+\boxed{\;
+\bmath{K}_b \;=\; \dfrac{EI}{L^3\,(1+\Phi)}\,
+\begin{bmatrix}
+12      & 6L          & -12     & 6L         \\
+6L      & (4+\Phi)L^2 & -6L     & (2-\Phi)L^2 \\
+-12     & -6L         & 12      & -6L        \\
+6L      & (2-\Phi)L^2 & -6L     & (4+\Phi)L^2
+\end{bmatrix}.
+\;}
+\]
+The axial block is the same $EA/L$ as EB2D on indices $(0, 3)$. The shape functions used to derive this are the exact homogeneous-solution interpolants of the Timoshenko equations; this is the textbook locking-free 2-node element (e.g.\ Friedman--Kosmatka 1993). No EAS, no selective reduced integration, no extra DOFs.
+
+\paragraph{Sanity check at the closed-form level.}
+For a single-element fixed-free cantilever with tip load $F_z$, solving the 2$\times$2 free-DOF system on $(u_{zB}, \theta_{yB})$ with the matrix above gives
+\[
+u_z(L) = \dfrac{F_z L^3}{3 EI} + \dfrac{F_z L}{\kappa GA},
+\qquad
+\theta_y(L) = \dfrac{F_z L^2}{2 EI},
+\]
+the classical Timoshenko cantilever solution. The first term is the EB bending contribution; the second is the additional shear deflection. \texttt{test\_timo2d\_cantilever.cpp} verifies this on a 10-element mesh to relative $10^{-9}$.
+
+\paragraph{$\Phi \to 0$ limit.}
+At $\Phi = 0$ the matrix above is the standard EB Hermite block ($4 EI/L$ and $2 EI/L$ on the $\theta\theta$ entries; no $(1+\Phi)$ denominator). \texttt{test\_timo2d\_phi\_limit.cpp} compares all 36 \texttt{ke} entries against EB2D's at $\Phi \approx 10^{-9}$ and confirms agreement to relative $10^{-7}$.
+
+\paragraph{Locking-free verification.}
+At $L/h = 1000$ with only 4 elements, the closed-form Timoshenko element matches the analytical cantilever solution to relative $6.66 \times 10^{-16}$ (\texttt{test\_timo2d\_shear\_locking.cpp}). A locking element would be over-stiff by orders of magnitude on this case.
+
+\section{Mass}
+
+Translational consistent mass + explicit rotary inertia:
+\begin{itemize}
+    \item Axial mass on $(0, 3)$: $\rho A L / 6 \cdot [[2,1],[1,2]]$ (same as EB2D).
+    \item Hermite translational mass on $(1, 2, 4, 5)$: the standard EB Hermite block, capturing $\tfrac{1}{2} \int \rho A \dot u_z^2 \dd x$.
+    \item Rotary inertia on $(2, 5)$: $\rho I_z L / 6 \cdot [[2,1],[1,2]]$, ADDED on top of the Hermite block. Uses linear shape functions for $\theta_y$ and captures $\tfrac{1}{2} \int \rho I_z \dot\theta_y^2 \dd x$. \emph{Required} for any meaningful Timoshenko dynamic / modal analysis.
+\end{itemize}
+\textbf{Timoshenko--EB2D mass delta:} exactly the $2\times 2$ rotary inertia block on the $(\theta_{yA}, \theta_{yB})$ indices, zero elsewhere. \texttt{test\_timo2d\_mass.cpp} verifies this delta directly.
+
+The fully consistent Friedman--Kosmatka $\Phi$-dependent mass is more elaborate and is intentionally deferred: for slender to moderately thick beams the dominant correction over EB is the rotary inertia (added above), and the $\Phi$-dependent translational terms are a small refinement only at high $L/h$ regimes that are not in Phase~1's verification scope.
+
+\section{Coordinate transformation}
+
+Identical to EB2D: $\bmath{T}_{\text{2D}} = \mathrm{diag}(\bmath{T}_n, \bmath{T}_n)$ with $\bmath{T}_n = [[c, -s, 0], [s, c, 0], [0, 0, 1]]$, $c = \Delta x_x / L$, $s = \Delta x_z / L$. \texttt{Timoshenko2D::computeTransformation} delegates to \texttt{Rotation2D::compute}, the same utility used by EB2D. The \texttt{refVector} argument is ignored in 2D. No $\Sdiag\lam\Sdiag$ adapter is needed because $T_n(2,2) = 1$ already preserves $\theta_y$ under in-plane rotation about $\yhat$.
+
+\section{Internal forces}
+
+Same sign mapping as EB2D (same DOF order, same structural convention):
+\[
+N_A = -f_e[0],\ V_{z,A} = +f_e[1],\ M_{y,A} = +f_e[2],\quad
+N_B = +f_e[3],\ V_{z,B} = -f_e[4],\ M_{y,B} = -f_e[5],
+\]
+with $\bmath{f}_e = \bmath{k}_l\,\bmath{d}_l$. The only physical difference from EB is that $V_z$ in Timoshenko is now backed by a non-zero constitutive shear strain in the deep-beam regime.
+
+\section{Verification cases (Batch 4)}\label{sec:timo2d-verification}
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Cantilever under tip $F_z$}: $u_z(L) = F_z L^3/(3EI) + F_z L/(\kappa GA)$, $\theta_y(L) = F_z L^2/(2EI)$. The shear term is non-trivial ($\sim 0.74\%$ of total in the test geometry). Relative tolerance $10^{-9}$.
+    \item \textbf{Deep beam} ($L/h = 4$): Timoshenko tip deflection magnitude $> $ EB tip deflection magnitude; the ratio $|u_z^{\text{Timo}}/u_z^{\text{EB}}|$ matches the analytical $1 + 3 EI/(\kappa GA L^2)$ to relative $10^{-9}$ (shear contribution $\sim 4.65\%$).
+    \item \textbf{Slender limit} ($L/h = 1000$, well refined): Timoshenko agrees with EB2D to relative $\sim 10^{-6}$ (the shear-term relative magnitude is $\sim 10^{-7}$).
+    \item \textbf{Shear locking} ($L/h = 1000$, only 4 elements): closed-form Timoshenko matches analytical to relative $\sim 10^{-15}$; locking-free behavior demonstrated.
+    \item \textbf{$\Phi$-limit} (element-level, $\Phi \approx 10^{-9}$): all 36 \texttt{ke} entries vs.\ EB2D agree to relative $10^{-7}$; $(2-\Phi)$ entry sign is verified explicitly to reject a $(2+\Phi)$ typo.
+    \item \textbf{Mass coverage}: entry-by-entry local mass check; Timo--EB delta confirmed to be exactly the rotary inertia $2\times 2$ block; transformed mass on a rotated element.
+\end{itemize}
+
 \appendix
 
 \chapter{Test catalog}\label{app:tests}
 
-The full Phase 1 (Batches 1--3) test list and what each one covers. Run with \texttt{ctest --test-dir build --output-on-failure}; all currently pass.
+The full Phase 1 (Batches 1--4) test list and what each one covers. Run with \texttt{ctest --test-dir build --output-on-failure}; all currently pass.
 
 \begin{longtable}{p{4.5cm} l p{8cm}}
 \toprule
@@ -464,8 +565,14 @@ Test & Batch & Coverage \\
 \texttt{test\_eb2d\_eb3d\_crosscheck}& 3  & EB2D $I_z = $ EB3D $I_y$ in the $xz$-plane; tip $u_z$, $\theta_y$ agreement $<10^{-9}$. \\
 \texttt{test\_eb3d\_rigid\_body}     & 3  & Arbitrary orientation, non-axis-aligned $\lam$, rigid-body motion $\Rightarrow$ zero residual. Exercises $\Sdiag\lam\Sdiag$. \\
 \texttt{test\_eb3d\_mass}            & 3  & EB3D mass block-by-block, transformed mass, two-element accumulation, generic-orientation $T^\mathsf{T} M_l T$ consistency. \\
+\texttt{test\_timo2d\_cantilever}    & 4  & Analytical Timoshenko cantilever ($u_z = FL^3/(3EI) + FL/(\kappa GA)$, $\theta_y$), 1 NR step. \\
+\texttt{test\_timo2d\_deep\_beam}    & 4  & $L/h = 4$: $|u_z^{\text{Timo}}/u_z^{\text{EB}}| = 1 + 3 EI/(\kappa GA L^2)$ to $10^{-9}$. \\
+\texttt{test\_timo2d\_slender\_limit}& 4  & $L/h = 1000$, well refined: Timo vs.\ EB2D $< 10^{-6}$ relative. \\
+\texttt{test\_timo2d\_shear\_locking}& 4  & $L/h = 1000$, only 4 elements: locking-free; matches analytical to $\sim 10^{-15}$. \\
+\texttt{test\_timo2d\_phi\_limit}    & 4  & $\Phi \approx 10^{-9}$: all 36 \texttt{ke} entries vs.\ EB2D within $10^{-7}$; $(2-\Phi)$ sign verified. \\
+\texttt{test\_timo2d\_mass}          & 4  & Local mass entries, Timo--EB delta is exactly the rotary block, transformed mass on vertical element. \\
 \bottomrule
-\caption{Phase 1 test catalog (15 tests, all PASS).}
+\caption{Phase 1 test catalog (21 tests, all PASS).}
 \end{longtable}
 
 \chapter{Index-to-formula master table (3D)}\label{app:index-master}
