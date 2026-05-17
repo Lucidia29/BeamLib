@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>BeamLib — Batch 3 EB3D Test Results</title>
+<style>
+  :root {
+    --bg: #f8fafc;
+    --card: #ffffff;
+    --text: #0f172a;
+    --text-dim: #64748b;
+    --border: #e2e8f0;
+    --border-strong: #cbd5e1;
+    --blue: #2563eb;
+    --blue-light: #dbeafe;
+    --red: #dc2626;
+    --red-light: #fee2e2;
+    --green: #16a34a;
+    --green-light: #dcfce7;
+    --orange: #ea580c;
+    --orange-light: #ffedd5;
+    --violet: #7c3aed;
+    --violet-light: #ede9fe;
+    --slate: #475569;
+    --mono: ui-monospace, 'Cascadia Code', 'Consolas', Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    padding: 2rem 1rem;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+                 'Microsoft YaHei', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.55;
+  }
+  .container { max-width: 1180px; margin: 0 auto; }
+
+  header {
+    padding-bottom: 1rem;
+    margin-bottom: 1.5rem;
+    border-bottom: 2px solid var(--border);
+  }
+  header h1 { margin: 0 0 0.3rem 0; font-size: 1.75rem; letter-spacing: -0.01em; }
+  .subtitle { color: var(--text-dim); font-size: 0.95rem; margin: 0; }
+  .subtitle code { background: #e2e8f0; padding: 0.05rem 0.4rem; border-radius: 3px; font-size: 0.9em; }
+
+  .summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+    margin: 1.25rem 0 2rem 0;
+  }
+  .stat {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.9rem 1rem;
+  }
+  .stat-label { font-size: 0.78rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+  .stat-value { font-size: 1.5rem; font-weight: 600; margin-top: 0.2rem; font-family: var(--mono); }
+  .stat-value.pass { color: var(--green); }
+
+  .test-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.4rem 1.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 1px 2px rgba(15,23,42,0.04);
+  }
+  .test-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 0.4rem;
+  }
+  .test-header .left { display: flex; align-items: baseline; gap: 0.6rem; flex-wrap: wrap; }
+  .test-title { font-size: 1.25rem; font-weight: 600; margin: 0; }
+  .test-id { color: var(--text-dim); font-family: var(--mono); font-size: 0.85rem; }
+  .badge {
+    display: inline-block;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+  }
+  .badge.pass { background: var(--green-light); color: var(--green); }
+  .badge.fix  { background: var(--red-light); color: var(--red); }
+  .badge.new  { background: var(--blue-light); color: var(--blue); }
+  .test-summary { color: var(--text-dim); margin: 0 0 1rem 0; font-size: 0.95rem; }
+
+  .test-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+    gap: 1.5rem;
+    align-items: start;
+  }
+  @media (max-width: 820px) {
+    .test-body { grid-template-columns: 1fr; }
+  }
+  .panel h3 {
+    margin: 0 0 0.6rem 0;
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  th, td { padding: 0.4rem 0.55rem; text-align: left; border-bottom: 1px solid var(--border); }
+  th { font-weight: 600; color: var(--text-dim); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; }
+  td.num { font-family: var(--mono); text-align: right; white-space: nowrap; }
+  .err-ok { color: var(--green); font-family: var(--mono); font-size: 0.88rem; }
+  .err-bad { color: var(--red); font-family: var(--mono); font-size: 0.88rem; font-weight: 600; }
+
+  code { font-family: var(--mono); font-size: 0.88em; background: #f1f5f9; padding: 0.05rem 0.3rem; border-radius: 3px; }
+  .formula {
+    background: #f8fafc;
+    border-left: 3px solid var(--blue);
+    padding: 0.5rem 0.75rem;
+    margin: 0.5rem 0;
+    font-family: var(--mono);
+    font-size: 0.88rem;
+    border-radius: 0 4px 4px 0;
+  }
+  .formula .lbl { color: var(--text-dim); margin-right: 0.4rem; }
+
+  dl.params { margin: 0; font-size: 0.9rem; }
+  dl.params dt { font-weight: 600; display: inline; color: var(--slate); }
+  dl.params dt::after { content: ': '; }
+  dl.params dd { margin: 0 0 0.25rem 0; display: inline; font-family: var(--mono); }
+  dl.params dd::after { content: '\A'; white-space: pre; }
+
+  svg { width: 100%; height: auto; display: block; }
+  .svg-wrap {
+    background: #fafbfc;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.5rem;
+  }
+  .scale-note {
+    text-align: center;
+    margin-top: 0.4rem;
+    color: var(--text-dim);
+    font-size: 0.8rem;
+    font-family: var(--mono);
+  }
+
+  .subtest-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem;
+    margin-bottom: 0.6rem;
+  }
+  @media (max-width: 600px) { .subtest-grid { grid-template-columns: 1fr; } }
+  .subtest {
+    background: #f8fafc;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.6rem 0.75rem;
+  }
+  .subtest .top {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 0.25rem;
+  }
+  .subtest .name { font-weight: 600; font-size: 0.9rem; }
+  .subtest .desc { font-size: 0.82rem; color: var(--text-dim); }
+  .badge.sm { font-size: 0.7rem; padding: 0.1rem 0.4rem; }
+
+  .note {
+    background: var(--orange-light);
+    border-left: 3px solid var(--orange);
+    padding: 0.5rem 0.8rem;
+    margin: 1rem 0 0 0;
+    font-size: 0.88rem;
+    border-radius: 0 4px 4px 0;
+  }
+  .note strong { color: #9a3412; }
+  .note.info {
+    background: var(--violet-light);
+    border-left-color: var(--violet);
+  }
+  .note.info strong { color: #5b21b6; }
+  .note.fix {
+    background: var(--red-light);
+    border-left-color: var(--red);
+  }
+  .note.fix strong { color: #991b1b; }
+
+  footer {
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: 0.85rem;
+  }
+  footer code { background: #e2e8f0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<header>
+  <h1>BeamLib · Batch 3 EB3D 3D Euler–Bernoulli</h1>
+  <p class="subtitle">Branch <code>feat/batch-3-eb3d</code> · 6-DOF/node spatial EB element + 3D coordinate transformation with structural-convention <code>S·λ·S</code> rotation adapter</p>
+</header>
+
+<div class="summary">
+  <div class="stat">
+    <div class="stat-label">New tests (Batch 3)</div>
+    <div class="stat-value pass">6 / 6 PASS</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Total (Batches 1–3)</div>
+    <div class="stat-value pass">15 / 15 PASS</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Codex blockers</div>
+    <div class="stat-value pass">closed</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Rotation transform</div>
+    <div class="stat-value pass">S·λ·S</div>
+  </div>
+</div>
+
+<div class="note info" style="margin: 0 0 1.5rem 0;">
+  <strong>What Batch 3 adds.</strong> 3D Euler–Bernoulli beam with 6 DOFs/node <code>[u<sub>x</sub>, u<sub>y</sub>, u<sub>z</sub>, θ<sub>x</sub>, θ<sub>y</sub>, θ<sub>z</sub>]</code>. Two uncoupled bending planes (xy uses <code>EI<sub>z</sub></code>, xz uses <code>EI<sub>y</sub></code>) + St. Venant torsion (<code>GI<sub>x</sub>/L</code>) + required torsional rotary inertia (<code>ρI<sub>x</sub></code>). Local frame built via Gram–Schmidt projection of a per-element <code>refVector</code>, with a deterministic fallback ladder for parallel cases. <strong>3D rotation transformation</strong> uses <code>S·λ·S</code> with <code>S = diag(1, −1, 1)</code> to correctly map BeamLib's structural-convention rotation DOFs across frames.
+</div>
+
+<div class="note fix" style="margin: 0 0 1.5rem 0;">
+  <strong>Codex Round 1 (Batch 3) blockers resolved.</strong> Codex's review of the initial Batch 3 commit flagged two issues: (1) the rotation block of the 12×12 transformation matrix was <code>λ</code> instead of <code>S·λ·S</code>, which silently failed any geometry where <code>λ</code> commutes with <code>S</code> (e.g. beams in the xz-plane); (2) the EB3D mass-matrix path lacked direct test coverage. Both were addressed: the rigid-body patch test <code>test_eb3d_rigid_body</code> first confirmed the bug (residual norm ≈ 43140 on the buggy code), then verified the fix (residual ≈ 1.7×10⁻¹⁰). The mass-matrix path is now covered by <code>test_eb3d_mass</code>. See <code>REVIEW_NOTES.md</code> "CC Response to Codex Review — Batch 3 EB3D".
+</div>
+
+<!-- ============================================================ -->
+<!-- TEST 1: CANTILEVER (Fz + Fy) -->
+<!-- ============================================================ -->
+<section class="test-card">
+  <div class="test-header">
+    <div class="left">
+      <h2 class="test-title">3D cantilever (tip F<sub>z</sub> and tip F<sub>y</sub>)</h2>
+      <span class="test-id">test_eb3d_cantilever.cpp</span>
+      <span class="badge new">NEW</span>
+    </div>
+    <span class="badge pass">PASS</span>
+  </div>
+  <p class="test-summary">10-element cantilever along global +x, refVector = (0, 1, 0) → λ = I. Two cases verify each bending plane independently: F<sub>z</sub> exercises the xz-plane (stiffness <code>EI<sub>y</sub></code>), F<sub>y</sub> exercises the xy-plane (stiffness <code>EI<sub>z</sub></code>).</p>
+
+  <div class="test-body">
+    <div class="panel">
+      <h3>Setup</h3>
+      <dl class="params">
+        <dt>E, G</dt><dd>200 × 10⁹ Pa, 80 × 10⁹ Pa</dd>
+        <dt>A</dt><dd>0.01 m²</dd>
+        <dt>I<sub>y</sub>, I<sub>z</sub></dt><dd>8.333 × 10⁻⁶ m⁴ (equal)</dd>
+        <dt>I<sub>x</sub></dt><dd>16.667 × 10⁻⁶ m⁴</dd>
+        <dt>L, Mesh</dt><dd>1.0 m, 10 EB3D elements</dd>
+        <dt>refVector</dt><dd>(0, 1, 0) → local = global</dd>
+        <dt>BC</dt><dd>node 0 fully fixed (all 6 DOFs)</dd>
+      </dl>
+
+      <h3 style="margin-top:1rem;">Case 1: tip F<sub>z</sub> = −1000 N (xz-plane, EI<sub>y</sub>)</h3>
+      <div class="formula"><span class="lbl">u<sub>z</sub>(L) =</span> F<sub>z</sub>·L³ / (3·E·I<sub>y</sub>) = −2.00008 × 10⁻⁴ m</div>
+      <div class="formula"><span class="lbl">θ<sub>y</sub>(L) =</span> F<sub>z</sub>·L² / (2·E·I<sub>y</sub>) = −3.00012 × 10⁻⁴ rad</div>
+      <table>
+        <thead><tr><th>DOF</th><th>Expected</th><th>FEM</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>u<sub>z</sub>(L)</td><td class="num">−2.00008e−4</td><td class="num">−2.00008e−4</td><td class="err-ok">rel &lt; 1e−9</td></tr>
+          <tr><td>θ<sub>y</sub>(L)</td><td class="num">−3.00012e−4</td><td class="num">−3.00012e−4</td><td class="err-ok">rel &lt; 1e−9</td></tr>
+          <tr><td>u<sub>x</sub>, u<sub>y</sub></td><td class="num">0</td><td class="num">0</td><td class="err-ok">abs &lt; 1e−14</td></tr>
+          <tr><td>θ<sub>x</sub>, θ<sub>z</sub></td><td class="num">0</td><td class="num">0</td><td class="err-ok">abs &lt; 1e−14</td></tr>
+        </tbody>
+      </table>
+
+      <h3 style="margin-top:1rem;">Case 2: tip F<sub>y</sub> = −1000 N (xy-plane, EI<sub>z</sub>)</h3>
+      <div class="formula"><span class="lbl">u<sub>y</sub>(L) =</span> F<sub>y</sub>·L³ / (3·E·I<sub>z</sub>) = −2.00008 × 10⁻⁴ m</div>
+      <div class="formula"><span class="lbl">θ<sub>z</sub>(L) =</span> F<sub>y</sub>·L² / (2·E·I<sub>z</sub>) = −3.00012 × 10⁻⁴ rad</div>
+      <table>
+        <thead><tr><th>DOF</th><th>Expected</th><th>FEM</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>u<sub>y</sub>(L)</td><td class="num">−2.00008e−4</td><td class="num">−2.00008e−4</td><td class="err-ok">rel &lt; 1e−9</td></tr>
+          <tr><td>θ<sub>z</sub>(L)</td><td class="num">−3.00012e−4</td><td class="num">−3.00012e−4</td><td class="err-ok">rel &lt; 1e−9</td></tr>
+          <tr><td>u<sub>x</sub>, u<sub>z</sub></td><td class="num">0</td><td class="num">0</td><td class="err-ok">abs &lt; 1e−14</td></tr>
+          <tr><td>θ<sub>x</sub>, θ<sub>y</sub></td><td class="num">0</td><td class="num">0</td><td class="err-ok">abs &lt; 1e−14</td></tr>
+          <tr><td>NR iterations</td><td class="num">1</td><td class="num">1</td><td class="err-ok">exact</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="panel">
+      <h3>3D cantilever, case 1 (F<sub>z</sub>)</h3>
+      <div class="svg-wrap">
+        <svg viewBox="0 0 600 280" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace, monospace" font-size="11">
+          <defs>
+            <pattern id="hatch3D1" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)">
+              <line x1="0" y1="0" x2="0" y2="6" stroke="#475569" stroke-width="1.2"/>
+            </pattern>
+            <marker id="arrowDown3D1" viewBox="0 0 10 10" refX="5" refY="9" markerWidth="9" markerHeight="9" orient="auto">
+              <path d="M 0 0 L 5 10 L 10 0 z" fill="#ea580c"/>
+            </marker>
+            <marker id="arrowAxis3D1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/>
+            </marker>
+          </defs>
+
+          <!-- Isometric-ish global axes -->
+          <g transform="translate(40,230)" stroke="#475569" fill="#475569">
+            <line x1="0" y1="0" x2="40" y2="0" stroke-width="1.2" marker-end="url(#arrowAxis3D1)"/>
+            <line x1="0" y1="0" x2="0" y2="-35" stroke-width="1.2" marker-end="url(#arrowAxis3D1)"/>
+            <line x1="0" y1="0" x2="-22" y2="-15" stroke-width="1.2" marker-end="url(#arrowAxis3D1)"/>
+            <text x="44" y="4">x</text>
+            <text x="-3" y="-40">z</text>
+            <text x="-32" y="-18">y</text>
+          </g>
+
+          <!-- Fixed support -->
+          <rect x="78" y="60" width="22" height="120" fill="url(#hatch3D1)" stroke="#475569" stroke-width="1.2"/>
+          <line x1="100" y1="60" x2="100" y2="180" stroke="#475569" stroke-width="2"/>
+
+          <!-- Undeformed beam (dashed, along +x) -->
+          <line x1="100" y1="120" x2="500" y2="120" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4 3"/>
+
+          <!-- Deformed beam (cubic w(x) = F_z x^2 (3L-x)/(6EI), curving downward) -->
+          <path d="M 100,120 L 140,120.4 L 180,121.6 L 220,123.6 L 260,126.2 L 300,129.3 L 340,132.9 L 380,136.8 L 420,141.0 L 460,145.4 L 500,150.0"
+                stroke="#dc2626" stroke-width="2.4" fill="none" stroke-linejoin="round"/>
+
+          <!-- Nodes -->
+          <circle cx="100" cy="120" r="3.5" fill="#1f2937"/>
+          <circle cx="180" cy="121.6" r="2" fill="#dc2626"/>
+          <circle cx="260" cy="126.2" r="2" fill="#dc2626"/>
+          <circle cx="340" cy="132.9" r="2" fill="#dc2626"/>
+          <circle cx="420" cy="141.0" r="2" fill="#dc2626"/>
+          <circle cx="500" cy="150" r="3.5" fill="#dc2626"/>
+
+          <!-- Tip force F_z -->
+          <line x1="500" y1="105" x2="500" y2="172" stroke="#ea580c" stroke-width="2.5" marker-end="url(#arrowDown3D1)"/>
+          <text x="510" y="155" fill="#ea580c" font-weight="600" font-size="11">F<tspan baseline-shift="-3" font-size="9">z</tspan> = −1000 N</text>
+
+          <text x="60" y="55" fill="#475569" font-size="10">fixed (6 DOFs)</text>
+
+          <text x="510" y="100" fill="#dc2626" font-weight="600">tip</text>
+          <text x="510" y="113" fill="#dc2626" font-size="10">u<tspan font-size="9" baseline-shift="-2">z</tspan> = −2.00e−4</text>
+
+          <text x="230" y="108" fill="#94a3b8" font-size="10" font-style="italic">undeformed (L = 1 m)</text>
+        </svg>
+      </div>
+      <div class="scale-note">vertical displacement scaled ×125,000 for visibility</div>
+    </div>
+  </div>
+
+  <div class="note">
+    <strong>Convention check.</strong> Under BeamLib's structural convention <code>θ<sub>y</sub> = du<sub>z</sub>/dx</code>, a downward F<sub>z</sub> makes both u<sub>z</sub>(L) and θ<sub>y</sub>(L) negative (slope of a drooping cantilever is negative). The xy-plane case mirrors this: F<sub>y</sub> &lt; 0 gives u<sub>y</sub>(L) &lt; 0 and θ<sub>z</sub>(L) &lt; 0. Both match the analytical Euler–Bernoulli cantilever solution to relative 1e−9 in exactly one NR correction step.
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- TEST 2: TORSION -->
+<!-- ============================================================ -->
+<section class="test-card">
+  <div class="test-header">
+    <div class="left">
+      <h2 class="test-title">Pure torsion</h2>
+      <span class="test-id">test_eb3d_torsion.cpp</span>
+      <span class="badge new">NEW</span>
+    </div>
+    <span class="badge pass">PASS</span>
+  </div>
+  <p class="test-summary">10-element cantilever, tip torque <code>T<sub>x</sub> = +500 N·m</code>. St. Venant uniform torsion: <code>θ<sub>x</sub></code> linear along the span; all other DOFs zero; root reaction along θ<sub>x</sub> equals <code>−T<sub>x</sub></code>.</p>
+
+  <div class="test-body">
+    <div class="panel">
+      <h3>Setup</h3>
+      <dl class="params">
+        <dt>G</dt><dd>80 × 10⁹ Pa</dd>
+        <dt>I<sub>x</sub></dt><dd>16.667 × 10⁻⁶ m⁴ (polar)</dd>
+        <dt>L, mesh</dt><dd>1.0 m, 10 EB3D elements</dd>
+        <dt>BC</dt><dd>node 0 fully fixed (all 6 DOFs)</dd>
+        <dt>Load</dt><dd>T<sub>x</sub> = +500 N·m at node 10</dd>
+      </dl>
+
+      <h3 style="margin-top:1rem;">Analytical solution</h3>
+      <div class="formula"><span class="lbl">θ<sub>x</sub>(x) =</span> T<sub>x</sub>·x / (G·I<sub>x</sub>)  (linear along span)</div>
+      <div class="formula"><span class="lbl">θ<sub>x</sub>(L) =</span> T<sub>x</sub>·L / (G·I<sub>x</sub>) = 3.74993 × 10⁻⁴ rad</div>
+      <div class="formula"><span class="lbl">root reaction:</span> R<sub>θx</sub>(0) = −T<sub>x</sub> = −500 N·m</div>
+
+      <h3 style="margin-top:1rem;">Results</h3>
+      <table>
+        <thead><tr><th>Quantity</th><th>Analytical</th><th>FEM</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>θ<sub>x</sub>(L)</td><td class="num">+3.74993e−4</td><td class="num">+3.74993e−4</td><td class="err-ok">rel &lt; 1e−9</td></tr>
+          <tr><td>R<sub>θx</sub>(0)</td><td class="num">−500</td><td class="num">−500</td><td class="err-ok">rel &lt; 1e−9</td></tr>
+          <tr><td>All 6 reactions at any node ≠ 0, ≠ root θ<sub>x</sub></td><td class="num">0</td><td class="num">0</td><td class="err-ok">abs &lt; 1e−9</td></tr>
+          <tr><td>θ<sub>x</sub>(x<sub>k</sub>) for k = 1…10</td><td class="num">T<sub>x</sub>·x<sub>k</sub>/(GI<sub>x</sub>)</td><td class="num">match</td><td class="err-ok">rel &lt; 1e−9 per node</td></tr>
+          <tr><td>u<sub>x</sub>, u<sub>y</sub>, u<sub>z</sub>, θ<sub>y</sub>, θ<sub>z</sub> (tip)</td><td class="num">0</td><td class="num">0</td><td class="err-ok">abs &lt; 1e−14</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="panel">
+      <h3>Twist field θ<sub>x</sub>(x)</h3>
+      <div class="svg-wrap">
+        <svg viewBox="0 0 600 260" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace, monospace" font-size="11">
+          <defs>
+            <pattern id="hatchTors" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)">
+              <line x1="0" y1="0" x2="0" y2="6" stroke="#475569" stroke-width="1.2"/>
+            </pattern>
+            <marker id="torsArrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#7c3aed"/>
+            </marker>
+          </defs>
+
+          <!-- Top half: 3D representation of the beam with twist -->
+          <text x="120" y="20" fill="#0f172a" font-weight="600">3D twist (cross-sections rotated about local x)</text>
+
+          <!-- Fixed support -->
+          <rect x="58" y="40" width="22" height="80" fill="url(#hatchTors)" stroke="#475569" stroke-width="1.2"/>
+          <line x1="80" y1="40" x2="80" y2="120" stroke="#475569" stroke-width="2"/>
+
+          <!-- Beam centerline -->
+          <line x1="80" y1="80" x2="520" y2="80" stroke="#475569" stroke-width="2"/>
+
+          <!-- Cross-section markers showing increasing twist (rotated diamond) -->
+          <g stroke="#7c3aed" stroke-width="1.5" fill="#ede9fe">
+            <!-- node 0: no twist -->
+            <rect x="74" y="60" width="12" height="40" />
+            <!-- node 2: 20% twist, ~7.5e-5 rad ~ 4.3 deg, very small visually so show small ellipse rotated -->
+            <g transform="translate(168,80) rotate(8)">
+              <rect x="-6" y="-20" width="12" height="40" />
+            </g>
+            <g transform="translate(256,80) rotate(16)">
+              <rect x="-6" y="-20" width="12" height="40" />
+            </g>
+            <g transform="translate(344,80) rotate(24)">
+              <rect x="-6" y="-20" width="12" height="40" />
+            </g>
+            <g transform="translate(432,80) rotate(32)">
+              <rect x="-6" y="-20" width="12" height="40" />
+            </g>
+            <g transform="translate(520,80) rotate(40)">
+              <rect x="-6" y="-20" width="12" height="40" />
+            </g>
+          </g>
+
+          <!-- Tip torque indicator (curved arrow) -->
+          <path d="M 540 50 A 22 22 0 1 0 540 110" stroke="#7c3aed" stroke-width="2.5" fill="none" marker-end="url(#torsArrow)"/>
+          <text x="560" y="78" fill="#7c3aed" font-weight="600">T<tspan baseline-shift="-3" font-size="9">x</tspan></text>
+          <text x="560" y="92" fill="#7c3aed" font-size="10">= +500</text>
+
+          <text x="58" y="135" fill="#475569" font-size="10">fixed</text>
+          <text x="520" y="135" fill="#7c3aed" font-size="10">3.75e−4 rad</text>
+
+          <!-- Bottom half: linear θ_x(x) plot -->
+          <text x="120" y="170" fill="#0f172a" font-weight="600">θ_x(x) = T_x · x / (G I_x)</text>
+          <line x1="80" y1="240" x2="520" y2="240" stroke="#475569" stroke-width="1.2"/>
+          <line x1="80" y1="240" x2="80" y2="180" stroke="#475569" stroke-width="1.2"/>
+          <line x1="80" y1="240" x2="520" y2="180" stroke="#16a34a" stroke-width="2.4"/>
+          <circle cx="80" cy="240" r="3" fill="#16a34a"/>
+          <circle cx="520" cy="180" r="3" fill="#16a34a"/>
+          <text x="525" y="184" fill="#16a34a" font-size="10">3.75e−4</text>
+          <text x="60" y="244" fill="#475569" font-size="10">0</text>
+          <text x="510" y="252" fill="#475569" font-size="10">x = L</text>
+        </svg>
+      </div>
+      <div class="scale-note">cross-section rotation amplified ~50,000× for visibility; actual θ<sub>x</sub>(L) ≈ 0.021° (tiny)</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- TEST 3: TRANSFORM (3 subtests) -->
+<!-- ============================================================ -->
+<section class="test-card">
+  <div class="test-header">
+    <div class="left">
+      <h2 class="test-title">3D coordinate transformation (3 sub-tests)</h2>
+      <span class="test-id">test_eb3d_transform.cpp</span>
+      <span class="badge new">NEW</span>
+    </div>
+    <span class="badge pass">PASS</span>
+  </div>
+  <p class="test-summary">Verifies <code>BeamMath3D::buildLocalFrame3D</code> and the <code>S·λ·S</code> rotation transformation along three axes: local-frame round-trip on a rotated beam, refVector reorients which bending plane engages, and both levels of the fallback ladder when refVector ∥ beam axis.</p>
+
+  <div class="test-body" style="grid-template-columns: 1fr;">
+    <div class="panel">
+      <h3>Sub-tests</h3>
+      <div class="subtest-grid">
+        <div class="subtest">
+          <div class="top">
+            <span class="name">A. Local-force rotation</span>
+            <span class="badge pass sm">PASS</span>
+          </div>
+          <div class="desc">45-deg beam in xz-plane, refVector = (0, 1, 0). Apply a <em>local</em> +z transverse force, transform to global via <code>T<sup>T</sup></code>, solve, transform the global tip displacement back to local using λ for translations and <code>S·λ·S</code> for rotations. Local result equals horizontal-beam reference to relative 1e−9.</div>
+        </div>
+        <div class="subtest">
+          <div class="top">
+            <span class="name">B. refVector reorients bending plane</span>
+            <span class="badge pass sm">PASS</span>
+          </div>
+          <div class="desc">Beam along +x, tip global F<sub>y</sub> = −1000 N. With refVector = (0,1,0): local <code>u<sub>y</sub></code> bending engages, uses EI<sub>z</sub>, gives u<sub>y</sub>(L) = −3.33e−4. With refVector = (0,0,1): local xy = global xz so xz-bending engages, uses EI<sub>y</sub>, gives u<sub>y</sub>(L) = −8.33e−5. Different by the ratio I<sub>y</sub>/I<sub>z</sub> = 4. Both match analytical to 1e−9.</div>
+        </div>
+        <div class="subtest">
+          <div class="top">
+            <span class="name">C1. Fallback level 1</span>
+            <span class="badge pass sm">PASS</span>
+          </div>
+          <div class="desc">Beam along +y with refVector = (0, 1, 0) ∥ beam axis. First fallback (0, 0, 1) used → V<sub>y</sub> = (0,0,1), V<sub>z</sub> = (1,0,0). λ orthogonal with det = +1; transverse load gives correct analytical deflection.</div>
+        </div>
+        <div class="subtest">
+          <div class="top">
+            <span class="name">C2. Fallback level 2</span>
+            <span class="badge pass sm">PASS</span>
+          </div>
+          <div class="desc">Beam along +z with refVector = (0, 0, 1) ∥ beam axis. First fallback (0,0,1) also ∥; second fallback (0, 1, 0) used → V<sub>y</sub> = (0,1,0), V<sub>z</sub> = (−1,0,0). λ orthogonal; transverse load gives analytical deflection.</div>
+        </div>
+      </div>
+
+      <h3 style="margin-top:1rem;">Sub-test B numerical values</h3>
+      <table>
+        <thead><tr><th>refVector</th><th>Active bending plane</th><th>Stiffness</th><th>u<sub>y</sub>(L)</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td><code>(0, 1, 0)</code></td><td>local xy (= global xy)</td><td>EI<sub>z</sub></td><td class="num">−3.33333e−4</td><td class="err-ok">rel &lt; 1e−9</td></tr>
+          <tr><td><code>(0, 0, 1)</code></td><td>local xz (= global xy under λ rotation)</td><td>EI<sub>y</sub></td><td class="num">−8.33333e−5</td><td class="err-ok">rel &lt; 1e−9</td></tr>
+          <tr><td colspan="2">Ratio (should equal I<sub>y</sub>/I<sub>z</sub> = 4)</td><td class="num">4</td><td class="num">4.0000</td><td class="err-ok">consistency</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- TEST 4: CROSS-CHECK -->
+<!-- ============================================================ -->
+<section class="test-card">
+  <div class="test-header">
+    <div class="left">
+      <h2 class="test-title">EB2D ↔ EB3D cross-check</h2>
+      <span class="test-id">test_eb2d_eb3d_crosscheck.cpp</span>
+      <span class="badge new">NEW</span>
+    </div>
+    <span class="badge pass">PASS</span>
+  </div>
+  <p class="test-summary">Same physical cantilever, solved by both EB2D and EB3D. EB2D uses <code>props.Iz</code> for xz-plane bending, EB3D uses <code>props.Iy</code>; setting <code>I<sub>y</sub><sup>3D</sup> = I<sub>z</sub><sup>2D</sup></code> makes them produce identical answers in the shared physics. The unused 3D <code>I<sub>z</sub></code> is set to a different value to guard against a silent swap between the two bending planes.</p>
+
+  <div class="test-body">
+    <div class="panel">
+      <h3>Setup &amp; results</h3>
+      <dl class="params">
+        <dt>I shared</dt><dd>EB2D <code>I<sub>z</sub></code> = EB3D <code>I<sub>y</sub></code> = 8.333e−6</dd>
+        <dt>EB3D <code>I<sub>z</sub></code></dt><dd>4.0e−5 (intentionally different; not used in xz bending)</dd>
+        <dt>Mesh, L</dt><dd>10 elements, 1.0 m, along global +x</dd>
+        <dt>Load</dt><dd>F<sub>z</sub> = −1000 N at tip</dd>
+      </dl>
+
+      <table style="margin-top:0.6rem;">
+        <thead><tr><th>Quantity</th><th>EB2D</th><th>EB3D</th><th>Rel. diff</th></tr></thead>
+        <tbody>
+          <tr><td>tip u<sub>z</sub></td><td class="num">−2.00008e−4</td><td class="num">−2.00008e−4</td><td class="err-ok">&lt; 1e−9</td></tr>
+          <tr><td>tip θ<sub>y</sub></td><td class="num">−3.00012e−4</td><td class="num">−3.00012e−4</td><td class="err-ok">&lt; 1e−9</td></tr>
+          <tr><td>EB3D tip u<sub>y</sub></td><td colspan="2" class="num">0</td><td class="err-ok">abs &lt; 1e−14</td></tr>
+          <tr><td>EB3D tip θ<sub>z</sub></td><td colspan="2" class="num">0</td><td class="err-ok">abs &lt; 1e−14</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="panel">
+      <h3>Section-property mapping (xz-plane bending)</h3>
+      <div class="formula"><span class="lbl">EB2D:</span> bending uses <code>props.Iz = ∫z²dA</code> (2D convention)</div>
+      <div class="formula"><span class="lbl">EB3D:</span> bending about local y uses <code>props.Iy = ∫z²dA</code> (3D convention)</div>
+      <div class="formula"><span class="lbl">Mapping:</span> set <code>I<sub>y</sub><sup>3D</sup> = I<sub>z</sub><sup>2D</sup></code> for the same physical cross-section</div>
+
+      <p class="test-summary" style="margin-top:0.6rem;">The naming difference between 2D and 3D is a labeling artifact: in 2D the moment of inertia is named after the transverse direction (z), whereas in 3D it is named after the bending axis (y). PROJECT_SPEC §13.6 documents this mapping.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- TEST 5: RIGID-BODY PATCH (Codex blocker fix) -->
+<!-- ============================================================ -->
+<section class="test-card">
+  <div class="test-header">
+    <div class="left">
+      <h2 class="test-title">3D rigid-body patch test (Codex blocker fix)</h2>
+      <span class="test-id">test_eb3d_rigid_body.cpp</span>
+      <span class="badge fix">FIX VERIFIED</span>
+    </div>
+    <span class="badge pass">PASS</span>
+  </div>
+  <p class="test-summary">Imposes a small physical rigid-body motion <code>u = t + Ω×X</code> on a 2-node element with arbitrary orientation, then asserts that the assembled internal residual norm is near zero (rigid-body ⇒ no strain ⇒ no internal force). Geometry chosen so the rotation matrix λ does <em>not</em> commute with <code>S = diag(1, −1, 1)</code>, which is exactly the case that exposes the rotation-transformation bug Codex flagged.</p>
+
+  <div class="test-body">
+    <div class="panel">
+      <h3>Setup</h3>
+      <dl class="params">
+        <dt>Beam axis</dt><dd>in xy-plane at ~40° from +x</dd>
+        <dt>Origin x<sub>A</sub></dt><dd>(0.4, −0.3, 0.6) — non-axis-aligned</dd>
+        <dt>refVector</dt><dd>(0, 0, 1) — perpendicular to beam axis</dd>
+        <dt>Rigid translation t</dt><dd>(0.002, −0.001, 0.003)</dd>
+        <dt>Rigid rotation Ω</dt><dd>(0.0015, −0.0008, 0.0012) RH pseudovector</dd>
+        <dt>Stored θ</dt><dd>S·Ω = (+0.0015, +0.0008, +0.0012) — structural convention</dd>
+        <dt>External load</dt><dd>none</dd>
+      </dl>
+
+      <h3 style="margin-top:1rem;">Test logic</h3>
+      <ol style="margin: 0.2rem 0 0.6rem 1rem; padding: 0; font-size: 0.9rem;">
+        <li>Verify <code>‖λS − Sλ‖ &gt; 1e−12</code> (geometry actually exercises the bug)</li>
+        <li>Build the model, impose nodal DOFs to the rigid-body field</li>
+        <li>Build DofMap (all 12 DOFs free), call <code>assemble(R, K)</code></li>
+        <li>Assert <code>‖R‖ &lt; 1e−9</code></li>
+      </ol>
+
+      <h3 style="margin-top:1rem;">Before vs after the <code>S·λ·S</code> fix</h3>
+      <table>
+        <thead><tr><th>State</th><th>‖R‖</th><th>Result</th></tr></thead>
+        <tbody>
+          <tr><td>Buggy (plain λ rotation block)</td><td class="num">~43140</td><td class="err-bad">FAIL — non-physical residual under rigid body</td></tr>
+          <tr><td>Fixed (S·λ·S rotation block)</td><td class="num">1.66e−10</td><td class="err-ok">PASS — at floating-point noise level</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="panel">
+      <h3>Why λ alone is wrong</h3>
+      <div class="svg-wrap" style="padding:0.8rem 1rem; font-size:0.85rem; line-height:1.55; font-family:var(--mono);">
+        <p style="margin-top:0;">BeamLib stores rotation DOFs in mixed convention:</p>
+        <p style="margin:0.2rem 0;">&nbsp;&nbsp;θ<sub>x</sub> = +Ω<sub>x</sub> (RH)</p>
+        <p style="margin:0.2rem 0;">&nbsp;&nbsp;θ<sub>y</sub> = −Ω<sub>y</sub> (structural, opposite RH)</p>
+        <p style="margin:0.2rem 0;">&nbsp;&nbsp;θ<sub>z</sub> = +Ω<sub>z</sub> (matches RH)</p>
+        <p style="margin:0.6rem 0 0.2rem 0;">In any frame:</p>
+        <p style="margin:0.2rem 0;">&nbsp;&nbsp;<strong>θ = S · Ω</strong>, &nbsp; S = diag(1, −1, 1)</p>
+        <p style="margin:0.6rem 0 0.2rem 0;">For a physical rotation pseudovector,</p>
+        <p style="margin:0.2rem 0;">&nbsp;&nbsp;Ω<sub>local</sub> = λ · Ω<sub>global</sub></p>
+        <p style="margin:0.6rem 0 0.2rem 0;">So the stored rotation transforms as:</p>
+        <p style="margin:0.2rem 0;">&nbsp;&nbsp;θ<sub>local</sub> = S · Ω<sub>local</sub> = S · λ · Ω<sub>global</sub></p>
+        <p style="margin:0.2rem 0;">&nbsp;&nbsp;= S · λ · S · (S · Ω<sub>global</sub>)</p>
+        <p style="margin:0.2rem 0;">&nbsp;&nbsp;= <strong>(S · λ · S) · θ<sub>global</sub></strong></p>
+        <p style="margin:0.6rem 0 0.2rem 0;">Plain λ is correct only when λ commutes with S (e.g. xz-plane beams). For any other orientation, λS − Sλ ≠ 0 and the rigid-body strain has a spurious term.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="note fix">
+    <strong>Implementation.</strong> <code>BeamMath3D::buildTransformation3D</code> applies <code>S·λ·S</code> to the two rotation 3×3 blocks of the 12×12 element transformation, leaving the translation blocks as plain λ. The S adapter is a row-1 and column-1 sign flip on λ: <code>lambda_rot.row(1) *= -1.0; lambda_rot.col(1) *= -1.0;</code>. The fixed transformation preserves orthogonality (S² = I) and reproduces the correct rigid-body kinematics for every orientation tested.
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- TEST 6: MASS -->
+<!-- ============================================================ -->
+<section class="test-card">
+  <div class="test-header">
+    <div class="left">
+      <h2 class="test-title">EB3D mass matrix (4 sub-tests)</h2>
+      <span class="test-id">test_eb3d_mass.cpp</span>
+      <span class="badge new">NEW</span>
+    </div>
+    <span class="badge pass">PASS</span>
+  </div>
+  <p class="test-summary"><code>BeamModel&lt;EulerBernoulli3D&gt;::assembleMass()</code> coverage. Verifies all four local mass blocks (axial, torsional <code>ρI<sub>x</sub></code>, xy bending, xz bending), the rotation-block transformation under <code>T<sup>T</sup>M<sub>l</sub>T</code>, and shared-node accumulation. Prerequisite for Batches 8/9 (dynamics and modal analysis).</p>
+
+  <div class="test-body" style="grid-template-columns: 1fr;">
+    <div class="panel">
+      <h3>Sub-tests</h3>
+      <div class="subtest-grid">
+        <div class="subtest">
+          <div class="top">
+            <span class="name">6.1 Single horizontal element</span>
+            <span class="badge pass sm">PASS</span>
+          </div>
+          <div class="desc">Every nonzero entry of all four local mass blocks checked against the closed-form expressions. Tolerance: relative 1e−12. Plus four rigid-translation <code>u<sup>T</sup>Mu</code> checks (axial, u<sub>y</sub>, u<sub>z</sub>, θ<sub>x</sub>) giving <code>ρAL</code> or <code>ρI<sub>x</sub>L</code>.</div>
+        </div>
+        <div class="subtest">
+          <div class="top">
+            <span class="name">6.2 Rotated element (along +y)</span>
+            <span class="badge pass sm">PASS</span>
+          </div>
+          <div class="desc">Beam along global +y, refVector = (0,0,1) → local x = +y. Verifies that <code>T<sup>T</sup>M<sub>l</sub>T</code> correctly places: local axial mass on global <code>u<sub>y</sub></code>, local xy-bending translational mass on global <code>u<sub>z</sub></code>, local xz-bending translational mass on global <code>u<sub>x</sub></code>.</div>
+        </div>
+        <div class="subtest">
+          <div class="top">
+            <span class="name">6.3 Two elements, fixed root</span>
+            <span class="badge pass sm">PASS</span>
+          </div>
+          <div class="desc">Two horizontal elements, node 0 fully fixed. 12 free DOFs after reduction. Shared interior node receives contributions from both elements: axial diagonal = 4ρAL/6, torsion diagonal = 4ρI<sub>x</sub>L/6, both bending diagonals = 2·156·ρAL/420.</div>
+        </div>
+        <div class="subtest">
+          <div class="top">
+            <span class="name">6.4 Generic-orientation consistency</span>
+            <span class="badge pass sm">PASS</span>
+          </div>
+          <div class="desc">Non-axis-aligned beam with non-default refVector. Re-derives <code>M<sub>g</sub> = T<sup>T</sup>M<sub>l</sub>T</code> independently using <code>buildTransformation3D</code> (with the S·λ·S adapter) and <code>computeMass</code>, compares entry-by-entry against <code>assembleMass</code>. All 144 entries match to relative 1e−10.</div>
+        </div>
+      </div>
+
+      <h3 style="margin-top:1rem;">Key entries (sub-test 6.1, L = 1 m, ρA = 78, ρI<sub>x</sub> = 0.195)</h3>
+      <table>
+        <thead><tr><th>Block</th><th>Entry</th><th>Formula</th><th>Computed</th></tr></thead>
+        <tbody>
+          <tr><td>Axial</td><td><code>M(0,6)</code></td><td class="num">ρAL/6 = 13</td><td class="num">13</td></tr>
+          <tr><td>Torsion</td><td><code>M(3,3)</code></td><td class="num">2ρI<sub>x</sub>L/6 = 0.065</td><td class="num">0.065</td></tr>
+          <tr><td>Torsion</td><td><code>M(3,9)</code></td><td class="num">ρI<sub>x</sub>L/6 = 0.0325</td><td class="num">0.0325</td></tr>
+          <tr><td>xy bending</td><td><code>M(1,1)</code></td><td class="num">156·ρAL/420 = 28.97</td><td class="num">28.97</td></tr>
+          <tr><td>xy bending</td><td><code>M(1,5)</code></td><td class="num">+22L·ρAL/420 = +4.086</td><td class="num">+4.086</td></tr>
+          <tr><td>xz bending</td><td><code>M(2,2)</code></td><td class="num">156·ρAL/420 = 28.97</td><td class="num">28.97</td></tr>
+          <tr><td>xz bending</td><td><code>M(2,4)</code></td><td class="num">+22L·ρAL/420 = +4.086</td><td class="num">+4.086</td></tr>
+          <tr><td>Rigid θ<sub>x</sub> mass</td><td><code>u<sup>T</sup>Mu</code></td><td class="num">ρI<sub>x</sub>L = 0.195</td><td class="num">0.195</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="note">
+    <strong>Why <code>ρI<sub>x</sub></code> is mandatory.</strong> Without the torsional rotary inertia block on the <code>θ<sub>x</sub></code> DOFs, the polar inertia is absent and torsional eigenmodes either vanish or appear at spurious zero frequency in modal analysis. PROJECT_SPEC §3.4 and Codex Round 3 issue 2 both require this for any EB3D model that goes into Batch 8/9. The bending rotary inertia (<code>ρI<sub>y</sub></code>, <code>ρI<sub>z</sub></code>) is intentionally absent for EB and will be added by Timoshenko in Batches 4/5.
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- Build / run info -->
+<!-- ============================================================ -->
+<section class="test-card" style="background: #f1f5f9;">
+  <h2 class="test-title" style="font-size:1.1rem;">Build &amp; run summary</h2>
+  <div class="test-body">
+    <div class="panel">
+      <h3>Build</h3>
+      <table>
+        <tbody>
+          <tr><td>CMake</td><td class="num">3.16+</td></tr>
+          <tr><td>Compiler</td><td class="num">GCC 15.2.0 (MSYS2 UCRT64)</td></tr>
+          <tr><td>C++ standard</td><td class="num">C++17</td></tr>
+          <tr><td>Eigen</td><td class="num">3.4.0 (header-only)</td></tr>
+          <tr><td>Warnings</td><td class="err-ok">0</td></tr>
+          <tr><td>New source files</td><td>Math/BeamMath3D.h, Element/EulerBernoulli3D.h</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="panel">
+      <h3>CTest output (full 15 tests)</h3>
+      <pre style="background:#0f172a; color:#e2e8f0; padding:0.8rem 1rem; border-radius:6px; font-size:0.8rem; line-height:1.4; overflow-x:auto;">Test project C:/_Lucidia/Japhy/BeamLib/build
+ 1/15 Test #1:  test_compile_check ............ Passed
+ 2/15 Test #2:  test_eb2d_cantilever .......... Passed
+ 3/15 Test #3:  test_eb2d_patch ............... Passed
+ 4/15 Test #4:  test_eb2d_moment .............. Passed
+ 5/15 Test #5:  test_eb2d_postprocess ......... Passed
+ 6/15 Test #6:  test_eb2d_simply_supported .... Passed
+ 7/15 Test #7:  test_eb2d_rotated_beam ........ Passed
+ 8/15 Test #8:  test_eb2d_settlement .......... Passed
+ 9/15 Test #9:  test_eb2d_mass ................ Passed
+10/15 Test #10: test_eb3d_cantilever .......... Passed  &lt;-- new
+11/15 Test #11: test_eb3d_torsion ............. Passed  &lt;-- new
+12/15 Test #12: test_eb3d_transform ........... Passed  &lt;-- new
+13/15 Test #13: test_eb2d_eb3d_crosscheck ..... Passed  &lt;-- new
+14/15 Test #14: test_eb3d_rigid_body .......... Passed  &lt;-- new (Codex fix)
+15/15 Test #15: test_eb3d_mass ................ Passed  &lt;-- new (Codex fix)
+
+100% tests passed, 0 tests failed out of 15</pre>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <p>Generated alongside the EB3D theory PDF at <code>docs/theory/02_euler_bernoulli_3d.pdf</code> and the unified manual at <code>docs/theory/beam_theory_manual.pdf</code>. All numerical values come from actual runs of the test executables. The rigid-body residual norm (1.66e−10) is the linear-solver / floating-point noise floor for this geometry; the corresponding pre-fix residual on the same test was ~43140, four orders of magnitude above any physically meaningful tolerance.</p>
+</footer>
+
+</div>
+</body>
+</html>

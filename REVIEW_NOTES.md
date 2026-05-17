@@ -583,3 +583,29 @@ All previous Batch 2A / 2B / 3 tests still pass. No assertion values in the exis
 ### Status
 
 Both Codex blockers are closed. Batch 3 ready for re-review.
+
+## Codex Final Re-review - Batch 3 EB3D
+
+### Status
+
+Batch 3 is merge-ready from the numerical-methods review perspective.
+
+### Verified
+
+- The previous rotation-convention blocker is resolved in code. `include/BeamLib/Math/BeamMath3D.h` now uses `S * lambda * S` on the rotation blocks and keeps plain `lambda` on the translation blocks.
+- `tests/test_eb3d_rigid_body.cpp` directly exercises the prior failure mode: a non-axis-aligned beam with a local frame for which `lambda` does not commute with `S = diag(1, -1, 1)`. It imposes a true rigid-body motion and verifies the assembled residual norm is near zero.
+- `tests/test_eb3d_mass.cpp` now gives direct EB3D mass coverage, including:
+  - horizontal local-block checks for axial, torsional, xy-bending, and xz-bending mass terms
+  - transformed-mass checks on a rotated element
+  - free-DOF reduction / shared-node accumulation on a two-element model
+  - generic rotated consistency against assembled `T^T M_l T`
+- The theory document now explicitly derives the `S * lambda * S` rotation mapping and explains why plain `lambda` is insufficient under BeamLib's mixed structural/right-hand-rule convention.
+- Local verification passed: `cmake --build build`; `ctest --test-dir build --output-on-failure` passed 15/15 tests.
+
+### Remaining Issues
+
+None for Batch 3.
+
+### Recommendation
+
+Merge Batch 3 after the branch is committed and pushed.
