@@ -609,3 +609,49 @@ None for Batch 3.
 ### Recommendation
 
 Merge Batch 3 after the branch is committed and pushed.
+
+## Codex Review - Batch 4 Timoshenko2D
+
+### Status
+
+No findings. Batch 4 is merge-ready from the numerical-methods review side.
+
+### Verified
+
+- `include/BeamLib/Element/Timoshenko2D.h` implements the expected 2D Timoshenko DOF set `[u_x, u_z, theta_y]` and keeps the established BeamLib structural sign convention `theta_y = d u_z / d x`.
+- The shear term uses `props.kappa()` and `SectionProperties::kappa()` resolves to `kappa_z`, so the 2D shear correction is mapped consistently with the `xz` bending plane.
+- The local stiffness uses the expected closed-form Phi-corrected 2-node formulation with
+  `Phi = 12 E I / (kappa G A L^2)` and the bending/shear block scaled by `1 / (1 + Phi)`. The implementation is symmetric and reduces correctly toward the Euler-Bernoulli form in the small-Phi limit.
+- `computeMass` includes:
+  - axial consistent translational mass
+  - Hermite-type transverse consistent mass on the bending/shear block
+  - explicit rotary inertia on the rotational DOFs through `rho * Iz`
+- `computeInternalForces` preserves the existing EB2D endpoint sign convention for `N`, `V_z`, and `M_y`, so postprocessing remains consistent across Batch 2 and Batch 4 elements.
+- `docs/theory/03_timoshenko_2d.tex` is coherent with the code and documents:
+  - kinematics and constitutive terms
+  - the exact Phi definition
+  - the closed-form corrected stiffness
+  - the EB limit
+  - the mass model and transformation convention
+  - formula-to-index mapping and sign conventions
+
+### Test Coverage Review
+
+- `tests/test_timo2d_cantilever.cpp` checks the analytical Timoshenko cantilever displacement and rotation.
+- `tests/test_timo2d_deep_beam.cpp` confirms the physically correct increase in deflection relative to EB for a shear-sensitive beam.
+- `tests/test_timo2d_slender_limit.cpp` verifies convergence to EB2D in the slender-beam regime.
+- `tests/test_timo2d_shear_locking.cpp` exercises the slender coarse-mesh case that would become artificially stiff under a locking-prone implementation.
+- `tests/test_timo2d_phi_limit.cpp` directly checks the `Phi -> 0` degeneration against `EulerBernoulli2D`.
+- `tests/test_timo2d_mass.cpp` gives direct local and transformed mass coverage.
+
+### Local Verification
+
+```
+cmake --build build
+ctest --test-dir build --output-on-failure
+21/21 tests passed
+```
+
+### Recommendation
+
+Merge Batch 4 after commit/push.

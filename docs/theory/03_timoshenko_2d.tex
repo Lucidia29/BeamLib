@@ -1,0 +1,345 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{hyperref}
+\usepackage{xcolor}
+
+\title{BeamLib Theory Manual \\ Chapter 3: Timoshenko 2D Beam Element}
+\author{BeamLib Development Team}
+\date{Phase 1, Batch 4}
+
+\newcommand{\dd}{\mathrm{d}}
+\newcommand{\bmath}[1]{\boldsymbol{#1}}
+
+\begin{document}
+\maketitle
+
+\section{Scope and Assumptions}
+
+This chapter derives the 2-node planar Timoshenko beam element used in BeamLib for shear-deformable beams. The element operates in the global $xz$-plane, with the same DOF order and sign conventions as EB2D (Chapter~1) so that Timoshenko and Euler--Bernoulli models can be assembled and post-processed through the same \texttt{BeamModel} infrastructure.
+
+\paragraph{Kinematic assumptions.}
+\begin{enumerate}
+    \item Plane sections remain plane after deformation.
+    \item Cross-section normals \emph{do not} remain perpendicular to the deformed beam axis. This is the defining Timoshenko relaxation of the EB hypothesis; it admits a constant shear strain across the cross-section.
+    \item Displacements and rotations are infinitesimal (linear theory).
+    \item Material is linear elastic, isotropic, homogeneous within the section.
+    \item St.\ Venant shear correction $\kappa$ is used to account for the actual non-uniform shear distribution. In BeamLib 2D we use \texttt{props.kappa()} which returns $\kappa_z$.
+\end{enumerate}
+
+The element is restricted to in-plane bending about the $y$-axis with axial extension along the local $x$-axis. Torsion and out-of-plane bending are 3D effects handled by Timoshenko 3D (Batch~5).
+
+\section{Sign and DOF Conventions}\label{sec:signs}
+
+\subsection{Coordinate system and DOF order}
+
+Identical to EB2D (Chapter~1, \S2): right-handed Cartesian frame, 2D problem in the $xz$-plane, per-node DOF
+\[
+\bmath{d}_i = \begin{bmatrix} u_{x,i} \\ u_{z,i} \\ \theta_{y,i} \end{bmatrix},
+\qquad
+\bmath{d}^e = \begin{bmatrix} u_{xA}, u_{zA}, \theta_{yA}, u_{xB}, u_{zB}, \theta_{yB} \end{bmatrix}^\mathsf{T} \in \mathbb{R}^6.
+\]
+
+\subsection{Structural rotation convention}\label{sec:thetay}
+
+BeamLib continues to use the structural convention $\theta_y = \dd u_z / \dd x$ in the EB limit (Chapter~1, \S2.4 justification). In Timoshenko the rotation $\theta_y$ is the \emph{independent section rotation} (an extra DOF, not slaved to the slope), and the BeamLib structural convention is the form it takes when shear vanishes:
+\begin{itemize}
+    \item In EB: $\theta_y \equiv \dd u_z / \dd x$ identically (no shear).
+    \item In Timoshenko: $\theta_y$ is an independent kinematic field; the slope $\dd u_z / \dd x$ \emph{differs} from $\theta_y$ by the shear strain $\gamma = \dd u_z / \dd x - \theta_y$. As shear stiffness $\kappa GA \to \infty$, the Timoshenko shear strain is driven to zero and $\theta_y$ asymptotes to $\dd u_z / \dd x$.
+\end{itemize}
+Both elements expose the same DOF; users do not need to switch conventions between EB2D and Timoshenko2D.
+
+\subsection{Sign convention table}
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{l l l}
+\toprule
+Quantity & Symbol & Positive direction \\
+\midrule
+Axial displacement       & $u_x$        & along $+\hat{x}$ \\
+Transverse displacement  & $u_z$        & along $+\hat{z}$ \\
+Section rotation         & $\theta_y$   & structural convention (Chapter~1 \S2.4) \\
+Axial force at a node    & $F_x$        & along $+\hat{x}$ \\
+Transverse force         & $F_z$        & along $+\hat{z}$ \\
+Nodal moment             & $M_y$        & work-conjugate to $\theta_y$ \\
+Shear strain             & $\gamma$     & $\gamma = \dd u_z/\dd x - \theta_y$ \\
+Bending curvature        & $\kappa$     & $\kappa = \dd \theta_y / \dd x$ \\
+\bottomrule
+\end{tabular}
+\caption{Sign conventions for Timoshenko 2D. Note that the curvature is $\theta_y'$ in Timoshenko (rather than $u_z''$ in EB), because $\theta_y$ is now independent of the slope.}
+\end{table}
+
+\section{Strain--Displacement Relations}
+
+The Timoshenko kinematic field uses a planar cross-section that rotates by $\theta_y$ independently of the beam-axis slope:
+\[
+u(x, z) = u_x(x) - z\,\theta_y(x), \qquad w(x, z) = u_z(x).
+\]
+The axial strain is
+\[
+\varepsilon_x = \frac{\partial u}{\partial x} = \frac{\dd u_x}{\dd x} - z\,\frac{\dd \theta_y}{\dd x}.
+\]
+The transverse shear strain is
+\[
+\gamma_{xz} = \frac{\partial u}{\partial z} + \frac{\partial w}{\partial x} = -\theta_y + \frac{\dd u_z}{\dd x} = \frac{\dd u_z}{\dd x} - \theta_y.
+\]
+EB sets $\gamma_{xz} \equiv 0$, recovering $\theta_y = \dd u_z / \dd x$. Timoshenko keeps $\gamma_{xz}$ as a constitutive shear strain.
+
+The strain energy density per unit length, after cross-sectional integration, is
+\[
+U' = \tfrac{1}{2}\,EA\,(u_x')^2 \;+\; \tfrac{1}{2}\,EI\,(\theta_y')^2 \;+\; \tfrac{1}{2}\,\kappa GA\,(\theta_y - u_z')^2,
+\]
+with $I \equiv I_z = \int z^2\,\dd A$ (same naming as EB2D; \texttt{SectionProperties::Iz}) and $\kappa \equiv \kappa_z$ from \texttt{SectionProperties::kappa()} (the $xz$-plane shear correction).
+
+The three constitutive constants are:
+\begin{itemize}
+    \item \textbf{Axial}: $EA$
+    \item \textbf{Bending}: $EI$
+    \item \textbf{Shear}: $\kappa GA$
+\end{itemize}
+
+\section{Closed-form Locking-free 2-node Stiffness}\label{sec:stiffness}
+
+\subsection{The locking problem}
+
+Direct $C^0$ interpolation of $u_z$ and $\theta_y$ with low-order shape functions (e.g.\ both linear) gives a Timoshenko element that locks: as $L/h \to \infty$ on a coarse mesh, the spurious shear strain energy dominates the genuine bending strain energy and the element becomes artificially stiff, producing tip deflections orders of magnitude smaller than the analytical solution. This is the classical Timoshenko shear locking documented in PROJECT\_SPEC \S13.4 and is the primary failure mode the chosen formulation must avoid.
+
+\subsection{Phi-corrected closed form}
+
+The chosen locking-free formulation is the 2-node \emph{closed-form Phi-corrected} Timoshenko stiffness. Define the dimensionless shear-bending ratio
+\[
+\boxed{\;\Phi = \dfrac{12\,E I}{\kappa GA\,L^2}.\;}
+\]
+$\Phi$ is small for slender / shear-stiff beams (EB regime) and large for deep / shear-soft beams. The bending/shear stiffness in DOF order $(u_{zA}, \theta_{yA}, u_{zB}, \theta_{yB})$ is
+\[
+\boxed{\;
+\bmath{K}_b \;=\; \dfrac{E I}{L^3\,(1+\Phi)}\,
+\begin{bmatrix}
+12      & 6L           & -12     & 6L          \\
+6L      & (4+\Phi)L^2  & -6L     & (2-\Phi)L^2 \\
+-12     & -6L          & 12      & -6L         \\
+6L      & (2-\Phi)L^2  & -6L     & (4+\Phi)L^2
+\end{bmatrix}.
+\;}
+\]
+The axial block is identical to EB2D, $\bmath{K}_a = (EA/L)\,[[1,-1],[-1,1]]$ on indices $(0, 3)$.
+
+\subsection{Derivation outline}
+
+For a 2-node element of length $L$ with no distributed load, the homogeneous Timoshenko equations are
+\[
+EI\,\theta_y'' = \kappa GA\,(u_z' - \theta_y), \qquad \kappa GA\,(u_z'' - \theta_y') = 0,
+\]
+whose general solution is $\theta_y(x) = a_1 + a_2 x + a_3 x^2$, $u_z(x) = b_0 + a_1 x + (a_2/2)x^2 + (a_3/3)x^3 + (EI/(\kappa GA))(2 a_3 x)$, four free constants. The Phi-corrected element uses these exact homogeneous-solution shape functions to interpolate $(u_z, \theta_y)$ from $(u_{zA}, \theta_{yA}, u_{zB}, \theta_{yB})$, then computes the element stiffness from
+\[
+K_{ij} = \int_0^L \left[ EI\,N_i'^\theta\,N_j'^\theta + \kappa GA\,(N_i'^u - N_i^\theta)(N_j'^u - N_j^\theta) \right] \dd x.
+\]
+The integrals can be performed in closed form and yield the matrix above. This is the standard textbook result (Reddy, Cook--Malkus--Plesha--Witt, Friedman--Kosmatka 1993).
+
+\subsection{Phi limit cross-check}\label{sec:philimit}
+
+In the EB limit $\Phi \to 0$:
+\[
+\bmath{K}_b \big|_{\Phi=0} = \dfrac{E I}{L^3}\,
+\begin{bmatrix}
+12      & 6L    & -12     & 6L   \\
+6L      & 4L^2  & -6L     & 2L^2 \\
+-12     & -6L   & 12      & -6L  \\
+6L      & 2L^2  & -6L     & 4L^2
+\end{bmatrix},
+\]
+exactly the EB2D Hermite block. \texttt{test\_timo2d\_phi\_limit.cpp} verifies this entry-by-entry to relative $10^{-10}$ by choosing geometry such that $\Phi \approx 10^{-9}$.
+
+\subsection{Cantilever closed-form solution as a stiffness check}
+
+Single-element fixed-free cantilever, tip load $F_z$:
+\[
+u_z(L) = \dfrac{F_z\,L^3}{3 EI} + \dfrac{F_z\,L}{\kappa GA},
+\qquad
+\theta_y(L) = \dfrac{F_z\,L^2}{2 EI}.
+\]
+The first term in $u_z$ is the EB bending contribution; the second is the additional shear deflection that Timoshenko captures and EB misses. The rotation $\theta_y(L)$ has the same form as EB.
+
+\paragraph{Direct verification.}
+Solve the single-element 2$\times$2 system on the free DOFs $(u_{zB}, \theta_{yB})$ using $\bmath{K}_b$. The determinant of the relevant $2\times2$ submatrix simplifies to $12(1+\Phi)\,L^2$, and direct substitution gives the two boxed expressions above. Done in code by \texttt{test\_timo2d\_cantilever.cpp}.
+
+\section{Assembled Local Stiffness ($6\times6$)}\label{sec:6x6}
+
+Embedding the axial block on indices $(0, 3)$ and the bending/shear block on indices $(1, 2, 4, 5)$, the nonzero entries of $\bmath{k}_l \in \mathbb{R}^{6\times6}$ are listed below. Let $s = EI / (L^3(1+\Phi))$.
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{l l l}
+\toprule
+Entry & Value & Note \\
+\midrule
+$k_l(0,0)$, $k_l(3,3)$ & $+EA/L$ & axial diagonal \\
+$k_l(0,3)$ & $-EA/L$ & axial off-diagonal \\
+$k_l(1,1)$, $k_l(4,4)$ & $+12\,s$ & u-u diagonal \\
+$k_l(1,4)$ & $-12\,s$ & u-u off-diagonal \\
+$k_l(1,2)$, $k_l(1,5)$ & $+6L\,s$ & u-$\theta$ couplings, positive at same node and cross-node \\
+$k_l(2,4)$, $k_l(4,5)$ & $-6L\,s$ & u-$\theta$ couplings, negative cross-node \\
+$k_l(2,2)$, $k_l(5,5)$ & $(4+\Phi)\,L^2\,s$ & $\theta$-$\theta$ diagonal \\
+$k_l(2,5)$ & $(2-\Phi)\,L^2\,s$ & $\theta_A$-$\theta_B$ \\
+\bottomrule
+\end{tabular}
+\caption{Local $6\times 6$ stiffness entries of Timoshenko 2D. All other entries are zero. Symmetric: $k_l(i,j) = k_l(j,i)$.}
+\end{table}
+
+\section{Mass Matrix}\label{sec:mass}
+
+The Timoshenko 2D consistent mass matrix has two physical contributions:
+
+\paragraph{Translational kinetic energy.}
+$\tfrac{1}{2} \int_0^L \rho A\,\dot u_z^2\,\dd x$, with $u_z$ interpolated by the standard cubic Hermite functions. This contributes the same $4\times 4$ Hermite mass block as EB2D, embedded on indices $(1, 2, 4, 5)$:
+\[
+\bmath{m}^{H}_{4\times 4} = \dfrac{\rho A L}{420}
+\begin{bmatrix}
+156 & 22L & 54 & -13L \\
+22L & 4L^2 & 13L & -3L^2 \\
+54 & 13L & 156 & -22L \\
+-13L & -3L^2 & -22L & 4L^2
+\end{bmatrix}.
+\]
+Axial translational mass on $(0, 3)$ is the same as EB2D: $\rho AL/6 \cdot [[2,1],[1,2]]$.
+
+\paragraph{Rotary inertia.}
+$\tfrac{1}{2} \int_0^L \rho I\,\dot\theta_y^2\,\dd x$, with $\theta_y$ interpolated by linear shape functions. This is the \emph{distinguishing} Timoshenko mass term, absent in EB2D. The resulting $2\times 2$ block adds to indices $(2, 5)$:
+\[
+\bmath{m}^{R}_{2\times 2} = \dfrac{\rho I L}{6}\begin{bmatrix} 2 & 1 \\ 1 & 2 \end{bmatrix}.
+\]
+\textbf{What this represents.} The rotary inertia accounts for the kinetic energy of the cross-section rotation $\dot\theta_y$. In EB, $\theta_y = \dd u_z/\dd x$ is a slope and rotary inertia is conventionally excluded (the diagonal $4L^2 \rho A L/420$ entries on $\theta_y$ in the Hermite block come from the translational energy via the shape functions, not from rotary inertia). In Timoshenko, $\theta_y$ is an independent rotational field with its own kinetic energy, and rotary inertia must be included for modal / dynamic analysis to reproduce the correct high-frequency behavior. PROJECT\_SPEC \S3.4 documents this.
+
+\paragraph{What is excluded.}
+The translational block is the EB-style Hermite mass (it does not depend on $\Phi$). The fully-consistent Friedman--Kosmatka $\Phi$-dependent mass matrix is more elaborate and is deliberately deferred: for slender to moderately thick beams the dominant correction over EB is the rotary inertia (added above), and the $\Phi$-dependent translational terms are a small refinement only at high $L/h$ regimes that are not in Phase~1's verification scope. The mass matrix described here is the standard teaching choice.
+
+\paragraph{Assembled $6\times 6$ matrix.}
+The nonzero entries of $\bmath{m}_l \in \mathbb{R}^{6\times 6}$ in DOF order $(u_{xA}, u_{zA}, \theta_{yA}, u_{xB}, u_{zB}, \theta_{yB})$ are
+\begin{align*}
+m_l(0,0) &= m_l(3,3) = \tfrac{\rho A L}{3}, & m_l(0,3) &= \tfrac{\rho A L}{6}, \\
+m_l(1,1) &= m_l(4,4) = \tfrac{156\,\rho A L}{420}, & m_l(1,4) &= \tfrac{54\,\rho A L}{420}, \\
+m_l(1,2) &= \tfrac{22 L\,\rho A L}{420}, & m_l(1,5) &= -\tfrac{13 L\,\rho A L}{420}, \\
+m_l(2,4) &= \tfrac{13 L\,\rho A L}{420}, & m_l(4,5) &= -\tfrac{22 L\,\rho A L}{420}, \\
+m_l(2,2) &= m_l(5,5) = \tfrac{4 L^2\,\rho A L}{420} + \tfrac{\rho I L}{3}, & m_l(2,5) &= -\tfrac{3 L^2\,\rho A L}{420} + \tfrac{\rho I L}{6}.
+\end{align*}
+The Timoshenko-vs-EB2D delta is precisely $\rho I L / 6 \cdot [[2,1],[1,2]]$ on the $(2, 5)$ indices.
+
+\section{Coordinate Transformation}
+
+Identical to EB2D (Chapter~1, \S7): the 2D $6\times 6$ transformation $\bmath{T}$ is block-diagonal,
+\[
+\bmath{T} = \mathrm{diag}(\bmath{T}_n, \bmath{T}_n),
+\qquad
+\bmath{T}_n = \begin{bmatrix} c & -s & 0 \\ s & c & 0 \\ 0 & 0 & 1 \end{bmatrix},
+\]
+with $c = \Delta x_x / L$, $s = \Delta x_z / L$. BeamLib applies $\bmath{T}$ as
+\[
+\bmath{d}_l = \bmath{T}\bmath{d}_g, \qquad \bmath{r}_g = \bmath{T}^\mathsf{T}\bmath{r}_l, \qquad \bmath{k}_g = \bmath{T}^\mathsf{T}\bmath{k}_l\bmath{T}, \qquad \bmath{m}_g = \bmath{T}^\mathsf{T}\bmath{m}_l\bmath{T}.
+\]
+\texttt{Timoshenko2D::computeTransformation} delegates to \texttt{Rotation2D::compute}, the same utility used by EB2D. The \texttt{refVector} argument is ignored in 2D (kept for interface uniformity with 3D elements). No structural-vs-RH sign adapter is needed in 2D, because $T_n(2,2) = 1$ already preserves $\theta_y$ under in-plane rotation about $\hat{y}$.
+
+\section{Internal Forces}
+
+The element static method \texttt{computeInternalForces} returns the cross-section forces $\{N, V_z, M_y\}$ at both ends. The sign rule is identical to EB2D (Chapter~1, \S "Internal Forces"):
+\[
+\boxed{\begin{aligned}
+N_A &= -f_e[0], & V_{z,A} &= +f_e[1], & M_{y,A} &= +f_e[2], \\
+N_B &= +f_e[3], & V_{z,B} &= -f_e[4], & M_{y,B} &= -f_e[5],
+\end{aligned}}
+\]
+where $\bmath{f}_e = \bmath{k}_l\,\bmath{d}_l$ is the local element nodal force vector. The rule applies unchanged because the DOF order and structural sign conventions are identical between EB2D and Timoshenko2D; the only physical difference is that $V_z$ is now backed by a non-zero constitutive shear strain in the deep-beam regime.
+
+\section{Known Numerical Issues}\label{sec:locking}
+
+\paragraph{Shear locking.}
+Direct $C^0$ interpolation with linear $u_z$ and linear $\theta_y$ produces an element whose effective bending stiffness grows like $\kappa GA / L^2$ as $L/h \to \infty$, masking the genuine $EI/L^3$ bending contribution. The closed-form $\Phi$-corrected formulation avoids this entirely because its shape functions are the exact homogeneous-solution interpolants of the Timoshenko equations; in the slender limit they are continuously connected to the EB Hermite functions and produce no spurious shear energy. \texttt{test\_timo2d\_shear\_locking.cpp} verifies this on a coarse-mesh slender beam ($L/h = 1000$, only 4 elements).
+
+\paragraph{Why no EAS / selective reduced integration.}
+EAS (enhanced assumed strain) and SRI (selective reduced integration) are common alternative locking-free techniques. They require extra implementation machinery (enhanced modes for EAS, dual quadrature for SRI) and introduce mode counts / quadrature subtleties that are unnecessary for a 2-node teaching element. The $\Phi$-corrected closed form has none of these drawbacks: zero extra DOFs, closed-form (no quadrature), and a clean EB limit.
+
+\section{Formula-to-C++ Index Mapping}\label{sec:indexmap}
+
+\begin{longtable}{c c l}
+\toprule
+Formula symbol & C++ index / identifier & Meaning \\
+\midrule \endhead
+$u_{xA}$              & \texttt{dispVec[0]}    & node-A axial displacement \\
+$u_{zA}$              & \texttt{dispVec[1]}    & node-A transverse displacement \\
+$\theta_{yA}$         & \texttt{dispVec[2]}    & node-A section rotation \\
+$u_{xB}$              & \texttt{dispVec[3]}    & node-B axial displacement \\
+$u_{zB}$              & \texttt{dispVec[4]}    & node-B transverse displacement \\
+$\theta_{yB}$         & \texttt{dispVec[5]}    & node-B section rotation \\
+\midrule
+$EA$                  & \texttt{EA = props.E * props.A} & axial constitutive \\
+$EI$                  & \texttt{EI = props.E * props.Iz} & bending constitutive \\
+$\kappa GA$           & \texttt{GAk = props.kappa() * props.G * props.A} & shear constitutive (uses $\kappa_z$) \\
+$\Phi$                & \texttt{Phi = 12 * EI / (GAk * L*L)} & shear-bending ratio \\
+$(1 + \Phi)$          & \texttt{f = 1.0 + Phi} & locking-free denominator factor \\
+$s = EI / (L^3 (1+\Phi))$ & \texttt{s = EI / (L3 * f)} & block scaling \\
+\midrule
+$k_l(0,0)$            & \texttt{ke(0,0)} & $+EA/L$ \\
+$k_l(0,3)$            & \texttt{ke(0,3)} & $-EA/L$ \\
+$k_l(1,1)$            & \texttt{ke(1,1)} & $+12\,s$ \\
+$k_l(1,4)$            & \texttt{ke(1,4)} & $-12\,s$ \\
+$k_l(1,2)$, $k_l(1,5)$ & \texttt{ke(1,2)}, \texttt{ke(1,5)} & $+6L\,s$ \\
+$k_l(2,4)$, $k_l(4,5)$ & \texttt{ke(2,4)}, \texttt{ke(4,5)} & $-6L\,s$ \\
+$k_l(2,2)$, $k_l(5,5)$ & \texttt{ke(2,2)}, \texttt{ke(5,5)} & $(4+\Phi)\,L^2\,s$ \\
+$k_l(2,5)$            & \texttt{ke(2,5)} & $(2-\Phi)\,L^2\,s$ \\
+\midrule
+Hermite mass block scaling & \texttt{bend = rho*A*L / 420} & translational mass \\
+Rotary inertia block scaling & \texttt{rot = rho*Iz*L / 6} & section rotation inertia \\
+$m_l(2,2)$ Timo--EB delta  & \texttt{2*rot} added to $m_l(2,2)$ & rotary inertia diagonal \\
+$m_l(2,5)$ Timo--EB delta  & \texttt{+rot} added to $m_l(2,5)$ & rotary inertia off-diagonal \\
+\bottomrule
+\caption{Formula-to-C++ map for Timoshenko 2D.}
+\end{longtable}
+
+\section{Verification Cases}\label{sec:verification}
+
+\begin{itemize}
+    \item \textbf{A. Tip-loaded cantilever} (\texttt{test\_timo2d\_cantilever.cpp}). 10 elements, tip $F_z = -1000$. Analytical: $u_z(L) = F_z L^3/(3 EI) + F_z L/(\kappa GA)$, $\theta_y(L) = F_z L^2/(2 EI)$. The shear term is non-trivial. Relative tolerance $10^{-9}$ on both tip values, 1 NR step.
+    \item \textbf{B. Deep-beam check} (\texttt{test\_timo2d\_deep\_beam.cpp}). $L/h = 4$ (very thick). Timoshenko tip deflection magnitude must significantly exceed the EB prediction; the ratio $|u_z^{\text{Timo}}/u_z^{\text{EB}}|$ must match the analytical $1 + 3 EI/(\kappa GA L^2)$ to relative $10^{-9}$.
+    \item \textbf{C. Slender-limit check} (\texttt{test\_timo2d\_slender\_limit.cpp}). $L/h = 1000$. Timoshenko result must approach EB2D direct solve to relative $10^{-6}$.
+    \item \textbf{D. Shear-locking check} (\texttt{test\_timo2d\_shear\_locking.cpp}). Same $L/h = 1000$ but only 4 elements. Closed-form $\Phi$-corrected element must still match EB to relative $10^{-6}$ (proving the formulation is locking-free on coarse meshes).
+    \item \textbf{E. $\Phi$-limit check} (\texttt{test\_timo2d\_phi\_limit.cpp}). Choose section properties giving $\Phi \approx 10^{-9}$, compare each entry of Timoshenko's \texttt{ke} against EB2D's \texttt{ke}. Relative $10^{-7}$ (limited by $\Phi$ itself).
+    \item \textbf{F. Mass-matrix coverage} (\texttt{test\_timo2d\_mass.cpp}). Direct entry-by-entry check of the local mass; rotary inertia delta versus EB2D; symmetry; transformed mass under a non-trivial rotation.
+\end{itemize}
+
+\section{Verification Tolerance Table}
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{l l}
+\toprule
+Check & Tolerance \\
+\midrule
+Cantilever tip $u_z$, $\theta_y$ (10 elements) & relative $10^{-9}$ \\
+Deep beam Timoshenko / EB deflection ratio     & relative $10^{-9}$ \\
+Slender limit Timoshenko vs.\ EB2D (numerical) & relative $10^{-6}$ \\
+Shear-locking coarse mesh, $L/h = 1000$, 4 elems & relative $10^{-6}$ \\
+$\Phi \to 0$ stiffness entries vs.\ EB         & relative $10^{-7}$ \\
+Mass matrix entries (local)                    & relative $10^{-12}$ \\
+Mass matrix symmetry                           & absolute $10^{-12}$ \\
+Rotary inertia delta (Timo $-$ EB)             & relative $10^{-12}$ \\
+NR iteration count (linear case)               & exactly 1 correction step \\
+\bottomrule
+\end{tabular}
+\caption{Verification tolerances for Timoshenko 2D.}
+\end{table}
+
+\section{Implementation Pitfalls (for the Reviewer)}
+
+\begin{enumerate}
+    \item \textbf{Shear correction $\kappa$ source.} The 2D Timoshenko element uses \texttt{props.kappa()}, which returns $\kappa_z$. Using \texttt{props.kappa\_y} is a silent bug in 2D, because BeamLib stores both $\kappa_y$ and $\kappa_z$ for 3D Timoshenko but only $\kappa_z$ corresponds to the $xz$-plane shear behavior.
+    \item \textbf{$\Phi$ formula.} The denominator is $\kappa GA L^2$ (with the $\kappa$ \emph{inside} the denominator, multiplying $GA$). Misplacing $\kappa$ silently corrupts the element.
+    \item \textbf{Sign of $(2 - \Phi)$.} The off-diagonal $\theta_A$-$\theta_B$ entry is $(2 - \Phi) L^2 s$, with a minus sign before $\Phi$. Using $(2 + \Phi)$ would produce a symmetric matrix that violates the EB limit.
+    \item \textbf{Residual sign.} $\bmath{r}_l = \bmath{k}_l\,\bmath{d}_l$, same as EB2D and the BeamLib-wide convention.
+    \item \textbf{Mass rotary inertia.} The rotary inertia is added \emph{on top of} the Hermite translational mass, not as a replacement. The Timoshenko mass differs from EB2D mass only in the $\theta_y$ entries $(2, 2)$, $(2, 5)$, $(5, 5)$ -- and by exactly $\rho I L / 6 \cdot [[2,1],[1,2]]$ on the $(2, 5)$ subblock.
+\end{enumerate}
+
+\end{document}
