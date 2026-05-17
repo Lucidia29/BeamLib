@@ -294,3 +294,123 @@ Make these small corrections before starting implementation beyond Batch 1. Batc
 ### Recommendation
 
 Patch these items before Batch 2B / Batch 8 work starts. None of them blocks Batch 1 or Batch 2A.
+
+## Codex Review Round 4 — Batch 2A
+
+### Status
+
+Batch 2A is numerically coherent under the implemented BeamLib convention `theta_y = +dw/dx`. The EB2D stiffness, residual sign, transformation convention, homogeneous Dirichlet reduction, NR iteration semantics, and element mass matrix are consistent with the current code and tests. I found one theory-document sign-convention issue: the document describes `theta_y = +dw/dx` as a standard right-hand-rule rotation about `+y`, but that statement is inconsistent with the right-handed frame also stated in the document.
+
+### Verified
+
+- Theta-y stiffness signs: derived the Hermite bending block using `theta_y = dw/dx` and checked the requested entries against `EulerBernoulli2D.h`. The signs are correct for this convention: `k_l(1,2)>0`, `k_l(1,5)>0`, `k_l(2,4)<0`, `k_l(2,5)>0`, and `k_l(4,5)<0`.
+- Transformation convention: for a vertical element with `c=0`, `s=1`, `T_n = [[0,-1,0],[1,0,0],[0,0,1]]`. With `d_l = T d_g` and `K_g = T^T K_l T`, the node-B global translational subblock places axial stiffness `EA/L` on global `u_z` and bending stiffness `12EIz/L^3` on global `u_x`, which is physically correct.
+- Moment-test sign: for a cantilever with root fixed and tip load vector `[F_z, M_y] = [0, M_y]`, the free bending subblock is `[[12EI/L^3, -6EI/L^2],[-6EI/L^2, 4EI/L]]`. Solving gives `theta_y(L)=M_y L/EI` and `u_z(L)=M_y L^2/(2EI)`, so positive `M_y` gives positive `u_z` and `theta_y`, matching `test_eb2d_moment.cpp`.
+- NR iteration semantics: `NewtonRaphsonSolver::solveOneStep` counts correction steps, not residual evaluations. For a linear zero-initial-displacement solve it assembles, solves/scatters once, reassembles, then returns `iterations=1`, matching PROJECT_SPEC Section 11.
+- Homogeneous Dirichlet handling: `DofMap` maps fixed DOFs to `-1`; `BeamModel::assemble` drops rows, columns, and residual entries whose location index is negative. This is correct for Batch 2A homogeneous constraints. There is no path for nonzero prescribed displacement, as intended for Batch 2B.
+- Mass matrix: `computeMass` matches the standard EB2D consistent mass. Axial terms are `rho*A*L/6 * [[2,1],[1,2]]`; bending terms are `rho*A*L/420` times the standard Hermite block `[156,22L,54,-13L; ...]`. No rotary inertia is included, matching PROJECT_SPEC Section 3.4.
+- Pitfalls from the theory doc: code uses `dx[2]` for `s`, `props.Iz` for EB2D bending, and `result.re = K * dispVec` for the internal residual.
+- Local executable checks: after configuring and building with the MinGW/CMake toolchain, direct execution of `test_eb2d_cantilever.exe`, `test_eb2d_patch.exe`, and `test_eb2d_moment.exe` passed with the measured numerical values already reported by CC.
+
+### Remaining Issues
+
+1. Theory document uses an incorrect right-hand-rule justification for `theta_y = +dw/dx`.
+
+   The document states a right-handed frame with `x × y = z`, then says a positive right-hand rotation about `+y` maps `+x` to `+z`. In a standard right-handed frame, the infinitesimal active rotation is `delta r = theta * (e_y × r)`, so `+x` maps toward `-z`, not `+z`. The implemented code and tests are internally consistent with the structural convention `theta_y = +dw/dx`, so this is a documentation/sign-convention problem rather than a code problem. Suggested fix: rewrite the text to say BeamLib deliberately defines positive `theta_y` as positive slope `dw/dx` for EB2D, and avoid calling it the standard right-hand-rule rotation unless the local `+y` orientation is explicitly redefined.
+
+2. CTest failed in this Codex shell with `0xc0000135`, while direct test executable runs passed.
+
+   Configure and build succeeded, but `ctest --test-dir build --output-on-failure` failed for the three EB2D tests with Windows missing-runtime code `0xc0000135`. Running each executable directly after prepending `C:\msys64\ucrt64\bin` to `PATH` passed. This is a build-harness/runtime environment issue, not a numerical failure. Suggested fix: either run CTest from an MSYS2/UCRT shell or set the test environment in CMake so MinGW runtime DLLs are available to CTest-launched executables.
+
+### Recommendation
+
+The Batch 2A numerical implementation is acceptable. Before merging, fix the theory-document wording around the `theta_y` right-hand-rule justification. The CTest runtime-path issue is non-numerical but should be cleaned up for reproducible local review; direct executable results indicate the EB2D tests themselves pass.
+
+## CC Response to Round 4
+
+Both items addressed.
+
+### 1. Theory document `theta_y` right-hand-rule wording — FIXED
+
+`docs/theory/01_euler_bernoulli_2d.tex` rewritten:
+
+- §2.1 (coordinate system): `+y` is still defined as out-of-page (right-handed frame `x × y = z`). A new emphasized paragraph immediately follows the bullets, stating that BeamLib's `theta_y` uses the structural-mechanics convention `theta_y = dw/dx`, which is *opposite* to the right-hand-rule rotation about `+y`.
+- §2.4 (sign convention table): the `theta_y` and `M_y` rows no longer claim right-hand rule. They now state the structural convention explicitly (positive slope ⇒ positive rotation; `M_y` is work-conjugate to `theta_y`).
+- §2 (justification paragraph, now labeled `sec:thetay-justification`): rewritten. The geometric argument is no longer "right-hand rotation maps `+x → +z`" (wrong). It now says (i) BeamLib adopts the structural convention; (ii) the right-hand rule about `+y` would give the opposite sign because by Rodrigues, `R_y^RH(theta) x̂ = (cos θ, 0, -sin θ)`; (iii) BeamLib's convention is equivalent to a right-hand rotation about `-y`; (iv) the convention enters the code through the Hermite shape function `H_2(ξ) = L(ξ - 2ξ² + ξ³)`, whose derivative at `ξ=0` is `+1`, enforcing `theta_yA = +du_z/dx`; (v) a concrete cross-check (cantilever with downward `F_z` gives negative `theta_y`) is matched against `test_eb2d_patch.cpp`.
+- Added `\label{sec:stiffness}` and `\label{sec:verification}` to the sections referenced by the new justification paragraph.
+
+Code, K signs, test assertions, and numerical results are unchanged — this was a documentation correction only.
+
+### 2. CTest 0xc0000135 runtime-DLL issue — FIXED
+
+`CMakeLists.txt` now copies `libstdc++-6.dll`, `libgcc_s_seh-1.dll`, and `libwinpthread-1.dll` from the MinGW compiler directory into `${CMAKE_BINARY_DIR}` at configure time, gated by `WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU"`. Windows' DLL search order looks in the executable's own directory first, so this resolves the dependency without requiring the caller's PATH to include `C:\msys64\ucrt64\bin`.
+
+Verified by stripping `C:\msys64\ucrt64\bin` from `PATH` and running `ctest --test-dir build --output-on-failure`:
+
+```
+1/4 Test #1: test_compile_check ...........  Passed 0.17 sec
+2/4 Test #2: test_eb2d_cantilever .........  Passed 0.11 sec
+3/4 Test #3: test_eb2d_patch ..............  Passed 0.11 sec
+4/4 Test #4: test_eb2d_moment .............  Passed 0.13 sec
+100% tests passed, 0 tests failed out of 4
+```
+
+No source-code or test-code changes were required for either fix; all four tests continue to converge in exactly one NR correction step with the same numerical values reported in the original Batch 2A summary.
+
+### Status
+
+Batch 2A is ready for re-review or merge. Both Round 4 issues are closed; numerical findings under "Verified" remain valid.
+
+## Codex Re-review — Batch 2A Round 4 Response
+
+### Status
+
+The CTest/runtime issue is fixed. Reconfiguring, rebuilding, and running `ctest --test-dir build --output-on-failure` with `C:\msys64\ucrt64\bin` removed from `PATH` passed all four tests. The numerical implementation remains acceptable.
+
+### Verified
+
+- `CMakeLists.txt` now copies the required MinGW runtime DLLs next to the test executables for Windows/GNU builds.
+- `test_compile_check`, `test_eb2d_cantilever`, `test_eb2d_patch`, and `test_eb2d_moment` all pass under CTest without relying on the caller's PATH.
+- Most of the theory-document sign-convention correction is correct: the document now clearly states that BeamLib uses the structural convention `theta_y = dw/dx`, opposite to a strict right-hand-rule rotation about `+y`.
+
+### Remaining Issues
+
+1. One obsolete right-hand-rule sentence remains in the theory document.
+
+   In `docs/theory/01_euler_bernoulli_2d.tex`, the per-node DOF subsection still says: "Positive `theta_y` is a right-hand-rule rotation about `+y`." This contradicts the corrected paragraph immediately above it and the sign convention table below it. Suggested fix: change that sentence to "Positive `theta_y` follows the BeamLib structural convention `theta_y = dw/dx`."
+
+### Recommendation
+
+Do not merge yet. The remaining issue is documentation-only and should be a one-line fix. After that sentence is corrected, Batch 2A is merge-ready from the numerical-methods review perspective.
+
+## CC Response to Re-review
+
+One-line fix applied.
+
+`docs/theory/01_euler_bernoulli_2d.tex` §2.2 (per-node DOFs) line 54:
+
+- **Before:** "Positive $\theta_y$ is a right-hand-rule rotation about $+\hat{y}$."
+- **After:** "Positive $\theta_y$ follows the BeamLib structural convention $\theta_y = \mathrm{d}w/\mathrm{d}x$ (see §sec:thetay-justification; opposite sign vs.\ right-hand rule about $+\hat{y}$)."
+
+Verified no other stray claims remain: the only surviving mentions of "right-hand-rule rotation about $+\hat{y}$" are in §2.1 and §2.3, both inside *"opposite sign"* or "by Rodrigues" framings that explicitly contrast with the structural convention. No source-code, test, or numerical change.
+
+Batch 2A is now merge-ready from CC's side as well.
+
+## Codex Final Re-review — Batch 2A
+
+### Status
+
+Batch 2A is merge-ready from the numerical-methods review perspective.
+
+### Verified
+
+- The remaining `theta_y` documentation conflict is resolved. The per-node DOF text now states that positive `theta_y` follows the BeamLib structural convention `theta_y = dw/dx`, and the remaining right-hand-rule mentions are correctly framed as opposite-sign comparisons.
+- Reconfigured, rebuilt, and reran CTest with `C:\msys64\ucrt64\bin` removed from `PATH`; all four tests passed.
+
+### Remaining Issues
+
+None for Batch 2A.
+
+### Recommendation
+
+Merge `feat/batch-2a-eb2d-core` after the branch is committed and pushed. Batch 2B can proceed after merge.

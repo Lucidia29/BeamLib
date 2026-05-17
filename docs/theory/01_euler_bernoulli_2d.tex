@@ -1,0 +1,392 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{hyperref}
+\usepackage{xcolor}
+
+\title{BeamLib Theory Manual \\ Chapter 1: Euler--Bernoulli 2D Beam Element}
+\author{BeamLib Development Team}
+\date{Phase 1, Batch 2A}
+
+\newcommand{\dd}{\mathrm{d}}
+\newcommand{\bmath}[1]{\boldsymbol{#1}}
+
+\begin{document}
+\maketitle
+
+\section{Scope and Assumptions}
+
+This chapter derives the 2-node planar Euler--Bernoulli (EB) beam element used in BeamLib for slender beams ($L/h > 20$). The element operates in the global $xz$-plane.
+
+\paragraph{Kinematic assumptions.}
+\begin{enumerate}
+    \item Plane sections remain plane after deformation.
+    \item Cross-section normals remain normal to the deformed beam axis (no shear deformation; this is the defining EB assumption).
+    \item Displacements and rotations are infinitesimal (linear theory).
+    \item Material is linear elastic, isotropic, homogeneous within the section.
+\end{enumerate}
+
+The element is restricted to in-plane bending about the $y$-axis with axial extension along the local $x$-axis. Torsion and out-of-plane bending are not modeled here (they are 3D effects, handled in EB3D).
+
+\section{Sign and DOF Conventions}
+
+\subsection{Coordinate system}
+
+We use a right-handed Cartesian frame with axes $(x, y, z)$ satisfying $\hat{x} \times \hat{y} = \hat{z}$. The 2D problem lives in the $xz$-plane:
+\begin{itemize}
+    \item $x$: in-plane axial reference direction.
+    \item $z$: in-plane transverse direction.
+    \item $y$: out-of-plane axis, oriented so that $(\hat{x}, \hat{y}, \hat{z})$ form a right-handed frame ($+\hat{y}$ points \emph{out} of the page in the standard view with $+\hat{x}$ rightward and $+\hat{z}$ upward).
+\end{itemize}
+
+\textbf{Important.} Positive $\theta_y$ in BeamLib is defined by the structural-mechanics convention $\theta_y = \mathrm{d}w/\mathrm{d}x$ (see \S\ref{sec:thetay-justification}). This is \emph{opposite} in sign to the strict right-hand-rule rotation about $+\hat{y}$. Throughout this manual ``$\theta_y$'' means the BeamLib structural convention unless explicitly noted.
+
+\subsection{Per-node DOFs}
+
+At every node $i$ we store three DOFs in the order
+\[
+\bmath{d}_i = \begin{bmatrix} u_{x,i} \\ u_{z,i} \\ \theta_{y,i} \end{bmatrix}.
+\]
+Positive $u_x$ is in the $+x$ direction (global). Positive $u_z$ is in the $+z$ direction (global). Positive $\theta_y$ follows the BeamLib structural convention $\theta_y = \mathrm{d}w/\mathrm{d}x$ (see \S\ref{sec:thetay-justification}; opposite sign vs.\ right-hand rule about $+\hat{y}$).
+
+\subsection{Element DOF vector}
+
+A 2-node EB2D element has 6 DOFs ordered as
+\[
+\bmath{d}^e = \begin{bmatrix} \bmath{d}_A \\ \bmath{d}_B \end{bmatrix} = \begin{bmatrix} u_{xA}, & u_{zA}, & \theta_{yA}, & u_{xB}, & u_{zB}, & \theta_{yB} \end{bmatrix}^\mathsf{T}.
+\]
+Indices in this chapter run $0,\dots,5$ to match the C++ implementation.
+
+\subsection{Sign convention table}
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{l l l}
+\toprule
+Quantity & Symbol & Positive direction \\
+\midrule
+Axial displacement & $u_x$ & along $+\hat{x}$ (global $x$) \\
+Transverse displacement & $u_z$ & along $+\hat{z}$ (global $z$) \\
+Section rotation & $\theta_y$ & structural convention: $\theta_y = \dd w/\dd x$ (positive slope $\Rightarrow$ positive rotation; opposite sign vs.\ right-hand rule about $+\hat{y}$) \\
+Axial force on a node & $F_x$ & along $+\hat{x}$ \\
+Transverse force on a node & $F_z$ & along $+\hat{z}$ \\
+Nodal moment & $M_y$ & work-conjugate to $\theta_y$ (same convention; positive $M_y$ produces positive $\theta_y$) \\
+Slope-rotation relation & $\theta_y(x) = \dd w/\dd x$ & with $w \equiv u_z$ \\
+\bottomrule
+\end{tabular}
+\caption{Sign conventions for the EB2D element.}
+\end{table}
+
+\paragraph{Justification of $\theta_y = \dd w / \dd x$ (structural convention).}\label{sec:thetay-justification}
+BeamLib adopts the standard structural-mechanics convention: a positive section rotation $\theta_y$ corresponds to a positive slope $\dd w / \dd x$. Geometrically, in the $xz$-plane as drawn ($+\hat{x}$ rightward, $+\hat{z}$ upward), this is a counter-clockwise rotation of the cross-section as the viewer reads the figure.
+
+This is the \emph{opposite} sign from a strict right-hand-rule rotation about $+\hat{y}$. By Rodrigues' formula,
+\[
+R_y^{\mathrm{RH}}(\theta)\hat{x} = (\cos\theta,\,0,\,-\sin\theta),
+\]
+so a positive right-hand-rule rotation tilts the cross-section normal toward $-\hat{z}$, not $+\hat{z}$. The BeamLib convention is therefore equivalent to a right-hand-rule rotation about $-\hat{y}$.
+
+We adopt the structural convention because (i) it makes bending kinematics intuitive: positive slope $\Rightarrow$ positive rotation, no mental flip needed when reading a diagram; (ii) it matches the standard Hermite shape function $H_2(\xi) = L(\xi - 2\xi^2 + \xi^3)$, whose derivative at $\xi=0$ is $+1$, enforcing $\theta_{yA} = +\dd u_z/\dd x$ at node $A$; (iii) it matches the MATLAB \texttt{JaphyBeam} reference and most structural-mechanics textbooks. The convention propagates consistently to every $k_l$ sign in \S\ref{sec:stiffness}, the residual definition $\bmath{r}_l = \bmath{k}_l\,\bmath{d}_l$, and the verification signs in \S\ref{sec:verification}.
+
+\textbf{Cross-check.} For a cantilever with downward tip load $F_z < 0$: the beam droops ($u_z(L) < 0$), the slope is negative at the tip ($\dd w/\dd x < 0$), so under the BeamLib convention $\theta_y(L) = \dd w/\dd x < 0$. The test \texttt{test\_eb2d\_patch.cpp} asserts this sign explicitly.
+
+\section{Strain--Displacement Relations}
+
+Let $u(x,z)$, $w(x,z)$ denote total displacement of a material point. EB kinematics:
+\[
+u(x,z) = u_x(x) - z\,\theta_y(x) = u_x(x) - z\,\frac{\dd w}{\dd x}, \qquad w(x,z) = u_z(x).
+\]
+The axial strain is
+\[
+\varepsilon_{xx} = \frac{\partial u}{\partial x} = \frac{\dd u_x}{\dd x} - z\,\frac{\dd^2 w}{\dd x^2}.
+\]
+The bending curvature is $\kappa = \dd^2 w / \dd x^2 = \dd^2 u_z / \dd x^2$.
+
+The strain energy density per unit length, after integrating over the cross-section, is
+\[
+\frac{1}{2}\!\int_A E\,\varepsilon_{xx}^2 \,\dd A
+= \frac{1}{2}\,E A \!\left(\frac{\dd u_x}{\dd x}\right)^2
++ \frac{1}{2}\,E I_z \!\left(\frac{\dd^2 u_z}{\dd x^2}\right)^2,
+\]
+where $I_z = \int_A z^2\,\dd A$ is the second moment of area about the $y$-axis (the axis perpendicular to the bending plane, i.e.\ $\hat{y}$). \textbf{In BeamLib we store this as \texttt{SectionProperties::Iz}}, consistent with the 2D xz-plane bending convention.
+
+\paragraph{Section property used.} 2D EB bending in the $xz$-plane uses \texttt{props.Iz}. The 2D--3D cross-validation table in PROJECT\_SPEC \S 13.6 maps 2D \texttt{Iz} $\leftrightarrow$ 3D \texttt{Iy} when comparing the same physical scenario.
+
+\section{Shape Functions}
+
+Use a 2-node element on the natural coordinate $\xi = x / L \in [0, 1]$.
+
+\subsection{Axial (linear)}
+
+\[
+N_1^a(\xi) = 1-\xi, \qquad N_2^a(\xi) = \xi.
+\]
+Axial displacement:
+\[
+u_x(\xi) = N_1^a(\xi)\,u_{xA} + N_2^a(\xi)\,u_{xB}.
+\]
+
+\subsection{Transverse (Hermite cubic)}
+
+Four cubic Hermite functions interpolate $u_z$ and $\theta_y = \dd u_z/\dd x$ at the two ends:
+\[
+\begin{aligned}
+H_1(\xi) &= 1 - 3\xi^2 + 2\xi^3, &\qquad H_2(\xi) &= L\,(\xi - 2\xi^2 + \xi^3), \\
+H_3(\xi) &= 3\xi^2 - 2\xi^3,     &\qquad H_4(\xi) &= L\,(-\xi^2 + \xi^3).
+\end{aligned}
+\]
+Transverse displacement:
+\[
+u_z(\xi) = H_1\,u_{zA} + H_2\,\theta_{yA} + H_3\,u_{zB} + H_4\,\theta_{yB}.
+\]
+Verification at the endpoints (using $\theta_y = \dd u_z/\dd x = (1/L)\,\dd u_z/\dd \xi$):
+\[
+u_z(0) = u_{zA},\ \ u_z(1) = u_{zB},\ \ \left.\frac{\dd u_z}{\dd x}\right|_{\xi=0} = \theta_{yA},\ \ \left.\frac{\dd u_z}{\dd x}\right|_{\xi=1} = \theta_{yB}.
+\]
+
+\subsection{Curvature operator}
+
+Let $\bmath{d}_b = (u_{zA}, \theta_{yA}, u_{zB}, \theta_{yB})^\mathsf{T}$. Then
+\[
+\kappa(\xi) = \frac{\dd^2 u_z}{\dd x^2} = \bmath{B}_b(\xi)\,\bmath{d}_b,
+\]
+with
+\[
+\bmath{B}_b(\xi) = \frac{1}{L^2}\begin{bmatrix} -6 + 12\xi & L(-4 + 6\xi) & 6 - 12\xi & L(-2 + 6\xi) \end{bmatrix}.
+\]
+
+\section{Element Stiffness Matrix Derivation}\label{sec:stiffness}
+
+\subsection{Axial stiffness}
+
+\[
+\bmath{k}^a_{2\times 2} = \int_0^L EA \begin{bmatrix} N_1'^2 & N_1' N_2' \\ N_1' N_2' & N_2'^2 \end{bmatrix} \dd x
+= \frac{EA}{L}\begin{bmatrix} 1 & -1 \\ -1 & 1 \end{bmatrix}.
+\]
+
+\subsection{Bending stiffness}
+
+\[
+\bmath{k}^b_{4\times 4} = \int_0^L EI_z \,\bmath{B}_b^\mathsf{T}\bmath{B}_b\,\dd x.
+\]
+Performing the integral yields the well-known result
+\[
+\bmath{k}^b = \frac{EI_z}{L^3}
+\begin{bmatrix}
+12 & 6L & -12 & 6L \\
+6L & 4L^2 & -6L & 2L^2 \\
+-12 & -6L & 12 & -6L \\
+6L & 2L^2 & -6L & 4L^2
+\end{bmatrix}.
+\]
+
+\subsection{Assembled element stiffness \texorpdfstring{$\bmath{k}_l$}{k\_l} in DOF order \texorpdfstring{$[u_{xA},u_{zA},\theta_{yA},u_{xB},u_{zB},\theta_{yB}]$}{[u\_xA, u\_zA, theta\_yA, u\_xB, u\_zB, theta\_yB]}}
+
+Mapping the axial block to indices $(0, 3)$ and the bending block to indices $(1, 2, 4, 5)$, the nonzero entries of the local $6\times 6$ stiffness $\bmath{k}_l$ are:
+
+\begin{align*}
+k_l(0,0) &= k_l(3,3) = \tfrac{EA}{L}, & k_l(0,3) &= k_l(3,0) = -\tfrac{EA}{L}, \\[2pt]
+k_l(1,1) &= k_l(4,4) = \tfrac{12 E I_z}{L^3}, & k_l(1,4) &= k_l(4,1) = -\tfrac{12 E I_z}{L^3}, \\[2pt]
+k_l(1,2) &= k_l(2,1) = \tfrac{6 E I_z}{L^2}, & k_l(1,5) &= k_l(5,1) = \tfrac{6 E I_z}{L^2}, \\[2pt]
+k_l(2,2) &= k_l(5,5) = \tfrac{4 E I_z}{L}, & k_l(2,5) &= k_l(5,2) = \tfrac{2 E I_z}{L}, \\[2pt]
+k_l(2,4) &= k_l(4,2) = -\tfrac{6 E I_z}{L^2}, & k_l(4,5) &= k_l(5,4) = -\tfrac{6 E I_z}{L^2}.
+\end{align*}
+All other entries are zero. The matrix is symmetric.
+
+\subsection{Residual convention}
+
+For this linear element the residual (internal force vector) is
+\[
+\boxed{\,\bmath{r}^e_l = \bmath{k}_l\,\bmath{d}^e_l.\,}
+\]
+The Newton residual at the global level is $\bmath{R} = \bmath{R}_{\mathrm{int}} - \bmath{F}_{\mathrm{ext}}$ and the correction equation is $\bmath{K}\,\delta = -\bmath{R}$. With this sign, the convergent state satisfies $\bmath{R}_{\mathrm{int}} = \bmath{F}_{\mathrm{ext}}$.
+
+\section{Consistent Mass Matrix}
+
+The consistent mass matrix for EB2D uses the same shape functions:
+\[
+\bmath{m}^a_{2\times 2} = \int_0^L \rho A
+\begin{bmatrix} N_1^a N_1^a & N_1^a N_2^a \\ N_1^a N_2^a & N_2^a N_2^a \end{bmatrix} \dd x
+= \frac{\rho A L}{6}\begin{bmatrix} 2 & 1 \\ 1 & 2 \end{bmatrix},
+\]
+\[
+\bmath{m}^b_{4\times 4} = \int_0^L \rho A\,\bmath{H}^\mathsf{T}\bmath{H}\,\dd x
+= \frac{\rho A L}{420}
+\begin{bmatrix}
+156 & 22L & 54 & -13L \\
+22L & 4L^2 & 13L & -3L^2 \\
+54 & 13L & 156 & -22L \\
+-13L & -3L^2 & -22L & 4L^2
+\end{bmatrix}.
+\]
+EB2D mass does \emph{not} include rotary inertia (this is the standard textbook consistent mass for EB and matches PROJECT\_SPEC \S 3.4). Embedded in the $6\times 6$ element DOF order:
+
+\begin{align*}
+m_l(0,0) &= m_l(3,3) = \tfrac{\rho A L}{3}, & m_l(0,3) &= m_l(3,0) = \tfrac{\rho A L}{6}, \\
+m_l(1,1) &= m_l(4,4) = \tfrac{156\,\rho A L}{420}, & m_l(1,4) &= m_l(4,1) = \tfrac{54\,\rho A L}{420}, \\
+m_l(1,2) &= m_l(2,1) = \tfrac{22 L\,\rho A L}{420}, & m_l(1,5) &= m_l(5,1) = -\tfrac{13 L\,\rho A L}{420}, \\
+m_l(2,2) &= m_l(5,5) = \tfrac{4 L^2\,\rho A L}{420}, & m_l(2,5) &= m_l(5,2) = -\tfrac{3 L^2\,\rho A L}{420}, \\
+m_l(2,4) &= m_l(4,2) = \tfrac{13 L\,\rho A L}{420}, & m_l(4,5) &= m_l(5,4) = -\tfrac{22 L\,\rho A L}{420}.
+\end{align*}
+This matrix is implemented in Batch 2A as part of \texttt{computeMass}, but the assembly path \texttt{BeamModel::assembleMass} is left for Batch 2B.
+
+\section{Coordinate Transformation}
+
+Each element is integrated in a canonical \emph{local} frame where node $A$ sits at the origin and node $B$ at $(L, 0, 0)$. The transformation $\bmath{T}$ relates global element DOFs to local DOFs.
+
+\subsection{Per-node block}
+
+Let $\Delta\bmath{x} = \bmath{x}_B - \bmath{x}_A$ in global coordinates with components $\Delta x_x$ and $\Delta x_z$ (the $y$ component is zero in the 2D problem). Define
+\[
+L = \|\Delta\bmath{x}\|,\qquad c = \frac{\Delta x_x}{L},\qquad s = \frac{\Delta x_z}{L}.
+\]
+The $3\times 3$ per-node block is
+\[
+\bmath{T}_n =
+\begin{bmatrix}
+c & -s & 0 \\
+s &  c & 0 \\
+0 &  0 & 1
+\end{bmatrix}.
+\]
+The element-level $6\times 6$ matrix is block-diagonal: $\bmath{T} = \mathrm{diag}(\bmath{T}_n, \bmath{T}_n)$.
+
+\subsection{Application convention}
+
+By construction $\bmath{T}$ is orthogonal ($\bmath{T}^\mathsf{T}\bmath{T} = \bmath{I}$). BeamLib applies the transformation as
+\[
+\bmath{d}_l = \bmath{T}\,\bmath{d}_g, \qquad
+\bmath{r}_g = \bmath{T}^\mathsf{T}\bmath{r}_l, \qquad
+\bmath{k}_g = \bmath{T}^\mathsf{T}\bmath{k}_l\,\bmath{T}.
+\]
+This convention matches the MATLAB reference (\texttt{JaphyBeam/JaphyEulerBernoulliBeam2D/calcTransformationMatrix.m}) and the user spec verbatim.
+
+\paragraph{Sanity checks.}
+\begin{itemize}
+    \item Horizontal beam ($\bmath{x}_B - \bmath{x}_A = (L,0,0)$): $c=1$, $s=0$, $\bmath{T}_n = \bmath{I}_3$, so local and global frames coincide.
+    \item Orthogonality: $\bmath{T}_n^\mathsf{T}\bmath{T}_n = \mathrm{diag}(c^2+s^2,\,c^2+s^2,\,1) = \bmath{I}_3$ since $c^2+s^2 = 1$.
+    \item Energy invariance: $\bmath{d}_g^\mathsf{T}\bmath{k}_g\bmath{d}_g = (\bmath{T}\bmath{d}_g)^\mathsf{T}\bmath{k}_l(\bmath{T}\bmath{d}_g) = \bmath{d}_l^\mathsf{T}\bmath{k}_l\bmath{d}_l$.
+    \item The $\theta_y$ DOF is invariant ($T_n(2,2) = 1$) because the rotation axis $\hat{y}$ is preserved by 2D in-plane rotation about $\hat{y}$.
+\end{itemize}
+
+\paragraph{Note on Batch 2A scope.}
+All Batch 2A tests use beams aligned with the global $x$-axis, so $\bmath{T} = \bmath{I}$ and the transformation is the identity. The non-trivial rotated-beam verification is deferred to Batch 2B (PROJECT\_SPEC \S 2B.5).
+
+\subsection{Reference vector}
+
+\texttt{computeTransformation(xA, xB, refVector)} takes a \texttt{refVector} argument for API uniformity with 3D elements but \textbf{ignores it} in 2D. The 2D rotation about $+\hat{y}$ is fully determined by the in-plane direction $(\Delta x_x, \Delta x_z)$.
+
+\section{Global Assembly}
+
+For each element with connectivity $(A, B)$:
+\begin{enumerate}
+    \item Build local $\bmath{T}$ from $\bmath{x}_A$, $\bmath{x}_B$.
+    \item Gather global element DOFs $\bmath{d}_g^e$ from nodal storage.
+    \item $\bmath{d}_l^e = \bmath{T}\,\bmath{d}_g^e$.
+    \item Pass $\bmath{x}_A^{loc} = (0,0,0)$, $\bmath{x}_B^{loc} = (L,0,0)$, $\bmath{d}_l^e$ to \texttt{EulerBernoulli2D::computeElement} to obtain $\bmath{r}_l^e$ and $\bmath{k}_l^e$.
+    \item $\bmath{r}_g^e = \bmath{T}^\mathsf{T}\bmath{r}_l^e$, $\bmath{k}_g^e = \bmath{T}^\mathsf{T}\bmath{k}_l^e\bmath{T}$.
+    \item Scatter $\bmath{r}_g^e$, $\bmath{k}_g^e$ into the free-DOF system using the DofMap. Entries with any fixed DOF on either side are dropped (Batch 2A only supports homogeneous Dirichlet constraints; PROJECT\_SPEC \S 11).
+\end{enumerate}
+
+\section{Formula-to-C++ Index Mapping}
+
+\begin{longtable}{c c l}
+\toprule
+Formula symbol & C++ index & Meaning \\
+\midrule
+\endhead
+$u_{xA}$ & \texttt{dispVec[0]} & node-A axial displacement (global $x$ in canonical local frame) \\
+$u_{zA}$ & \texttt{dispVec[1]} & node-A transverse displacement \\
+$\theta_{yA}$ & \texttt{dispVec[2]} & node-A section rotation \\
+$u_{xB}$ & \texttt{dispVec[3]} & node-B axial displacement \\
+$u_{zB}$ & \texttt{dispVec[4]} & node-B transverse displacement \\
+$\theta_{yB}$ & \texttt{dispVec[5]} & node-B section rotation \\
+\midrule
+$k_l(0,0)$ & \texttt{ke(0,0)} & $EA/L$ \\
+$k_l(3,3)$ & \texttt{ke(3,3)} & $EA/L$ \\
+$k_l(0,3)$ & \texttt{ke(0,3)} & $-EA/L$ \\
+$k_l(1,1)$ & \texttt{ke(1,1)} & $12 E I_z / L^3$ \\
+$k_l(1,2)$ & \texttt{ke(1,2)} & $6 E I_z / L^2$ \\
+$k_l(1,4)$ & \texttt{ke(1,4)} & $-12 E I_z / L^3$ \\
+$k_l(1,5)$ & \texttt{ke(1,5)} & $6 E I_z / L^2$ \\
+$k_l(2,2)$ & \texttt{ke(2,2)} & $4 E I_z / L$ \\
+$k_l(2,4)$ & \texttt{ke(2,4)} & $-6 E I_z / L^2$ \\
+$k_l(2,5)$ & \texttt{ke(2,5)} & $2 E I_z / L$ \\
+$k_l(4,4)$ & \texttt{ke(4,4)} & $12 E I_z / L^3$ \\
+$k_l(4,5)$ & \texttt{ke(4,5)} & $-6 E I_z / L^2$ \\
+$k_l(5,5)$ & \texttt{ke(5,5)} & $4 E I_z / L$ \\
+\midrule
+$c$ & \texttt{c} & $\Delta x_x / L$ \\
+$s$ & \texttt{s} & $\Delta x_z / L$ (note: $z$, not $y$, in the xz-plane) \\
+$T_n(0,1)$ & \texttt{T(0,1)} & $-s$ \\
+$T_n(1,0)$ & \texttt{T(1,0)} & $+s$ \\
+\bottomrule
+\caption{Formula symbol to C++ index mapping for EB2D.}
+\end{longtable}
+
+\section{Verification: Analytical Solutions}\label{sec:verification}
+
+\subsection{Cantilever tip transverse load}
+
+A cantilever of length $L$ fixed at node 0 with a transverse load $F_z$ at the tip satisfies
+\[
+u_z(L) = \frac{F_z\,L^3}{3 E I_z}, \qquad \theta_y(L) = \frac{F_z\,L^2}{2 E I_z}.
+\]
+For $F_z < 0$ (downward), both are negative (tip droops, slope is negative). With $F_z = -F$ ($F > 0$ being the magnitude),
+\[
+u_z(L) = -\frac{F L^3}{3 E I_z}, \qquad \theta_y(L) = -\frac{F L^2}{2 E I_z}.
+\]
+Reference numerical values used in \texttt{test\_eb2d\_cantilever.cpp}: $E = 200\!\times\!10^9$, $A = 0.01$, $I_z = 8.333\!\times\!10^{-6}$, $L=1.0$, $F=1000$, giving $u_z(L) = -2\!\times\!10^{-4}$ and $\theta_y(L) = -3\!\times\!10^{-4}$.
+
+\subsection{Cantilever tip end-moment}
+
+A cantilever with an applied end moment $M_y$ at the tip yields a constant curvature $\kappa = M_y / (E I_z)$ throughout the beam and
+\[
+u_z(L) = \frac{M_y\,L^2}{2 E I_z}, \qquad \theta_y(L) = \frac{M_y\,L}{E I_z}.
+\]
+The bending moment is constant along the span (no shear, pure bending).
+
+\subsection{Patch test (constant axial strain)}
+
+Apply $u_{xB} = u_0$ at the right end of an arbitrary mesh of EB2D elements aligned with $+\hat{x}$, with the left end pinned axially. Every element should report axial strain $u_0 / L_{\text{total}}$ and zero bending response.
+
+\subsection{Rigid translation}
+
+Setting $u_{xA} = u_{xB}$, $u_{zA} = u_{zB}$, $\theta_{yA} = \theta_{yB} = 0$ should give $\bmath{r}_l = \bmath{k}_l \bmath{d}_l$ where the axial block contributes zero (equal axial DOFs) and bending block also gives zero (constant deflection, zero curvature, zero rotation difference). Hence $\bmath{r}_l = \bmath{0}$.
+
+\section{Verification Tolerance Table}
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{l l}
+\toprule
+Check & Tolerance \\
+\midrule
+Single-element matrix entries ($EA/L$, $12EI/L^3$, $\dots$) & relative $10^{-12}$ \\
+Patch test rigid-translation residual & absolute $10^{-12}$ \\
+Patch test constant-strain residual & absolute $10^{-10}$ \\
+Cantilever tip $u_z$, $\theta_y$ (10 elements) & relative $10^{-9}$ \\
+Pure end-moment $u_z$, $\theta_y$ (10 elements) & relative $10^{-9}$ \\
+Constant-moment uniformity along span & relative $10^{-9}$ \\
+Newton iteration count (linear case) & exactly 1 correction step \\
+Final NR residual (linear case) & $\leq 10^{-7}$ absolute (set by NRConfig.tol) \\
+\bottomrule
+\end{tabular}
+\caption{Verification tolerance for EB2D tests.}
+\end{table}
+
+\section{Implementation Pitfalls (for the Reviewer)}
+
+\begin{enumerate}
+    \item \textbf{Section property choice.} EB2D bending in the $xz$-plane uses \texttt{props.Iz}. Using \texttt{props.Iy} is a silent bug in 2D (the field exists but has no role here).
+    \item \textbf{$s$ comes from $\Delta x_z$, not $\Delta x_y$.} The 2D problem lives in the $xz$-plane; $y$ is out-of-plane. Reusing a generic ``$xy$'' rotation formula will give wrong transformations for non-horizontal beams.
+    \item \textbf{Residual sign.} The element returns $\bmath{r}_l = \bmath{k}_l \bmath{d}_l$, not $-\bmath{k}_l \bmath{d}_l$. The Newton solver assembles $\bmath{R} = \bmath{R}_{\mathrm{int}} - \bmath{F}_{\mathrm{ext}}$ and solves $\bmath{K}\,\delta = -\bmath{R}$.
+    \item \textbf{$\theta_y$ sign under $F_z$.} A downward tip load yields a negative $\theta_y$ at the tip (test \texttt{test\_eb2d\_patch.cpp} explicitly checks this).
+    \item \textbf{Bending couplings.} The signs in $k_l$ entries connecting $u_z$ and $\theta_y$ at the same node are positive (e.g.\ $k_l(1,2) = +6EI/L^2$), while couplings between $u_z$ at one node and $\theta_y$ at the other can be positive or negative depending on which side (see the index map above).
+\end{enumerate}
+
+\end{document}

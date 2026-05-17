@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>BeamLib — Batch 2A EB2D Test Results</title>
+<style>
+  :root {
+    --bg: #f8fafc;
+    --card: #ffffff;
+    --text: #0f172a;
+    --text-dim: #64748b;
+    --border: #e2e8f0;
+    --border-strong: #cbd5e1;
+    --blue: #2563eb;
+    --blue-light: #dbeafe;
+    --red: #dc2626;
+    --red-light: #fee2e2;
+    --green: #16a34a;
+    --green-light: #dcfce7;
+    --orange: #ea580c;
+    --orange-light: #ffedd5;
+    --violet: #7c3aed;
+    --violet-light: #ede9fe;
+    --slate: #475569;
+    --mono: ui-monospace, 'Cascadia Code', 'Consolas', Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    padding: 2rem 1rem;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+                 'Microsoft YaHei', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.55;
+  }
+  .container { max-width: 1180px; margin: 0 auto; }
+
+  header {
+    padding-bottom: 1rem;
+    margin-bottom: 1.5rem;
+    border-bottom: 2px solid var(--border);
+  }
+  header h1 { margin: 0 0 0.3rem 0; font-size: 1.75rem; letter-spacing: -0.01em; }
+  .subtitle { color: var(--text-dim); font-size: 0.95rem; margin: 0; }
+  .subtitle code { background: #e2e8f0; padding: 0.05rem 0.4rem; border-radius: 3px; font-size: 0.9em; }
+
+  .summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+    margin: 1.25rem 0 2rem 0;
+  }
+  .stat {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.9rem 1rem;
+  }
+  .stat-label { font-size: 0.78rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+  .stat-value { font-size: 1.5rem; font-weight: 600; margin-top: 0.2rem; font-family: var(--mono); }
+  .stat-value.pass { color: var(--green); }
+
+  .test-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.4rem 1.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 1px 2px rgba(15,23,42,0.04);
+  }
+  .test-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 0.4rem;
+  }
+  .test-header .left { display: flex; align-items: baseline; gap: 0.6rem; flex-wrap: wrap; }
+  .test-title { font-size: 1.25rem; font-weight: 600; margin: 0; }
+  .test-id { color: var(--text-dim); font-family: var(--mono); font-size: 0.85rem; }
+  .badge {
+    display: inline-block;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+  }
+  .badge.pass { background: var(--green-light); color: var(--green); }
+  .test-summary { color: var(--text-dim); margin: 0 0 1rem 0; font-size: 0.95rem; }
+
+  .test-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+    gap: 1.5rem;
+    align-items: start;
+  }
+  @media (max-width: 820px) {
+    .test-body { grid-template-columns: 1fr; }
+  }
+  .panel h3 {
+    margin: 0 0 0.6rem 0;
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  th, td { padding: 0.4rem 0.55rem; text-align: left; border-bottom: 1px solid var(--border); }
+  th { font-weight: 600; color: var(--text-dim); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; }
+  td.num { font-family: var(--mono); text-align: right; white-space: nowrap; }
+  .err-ok { color: var(--green); font-family: var(--mono); font-size: 0.88rem; }
+
+  code { font-family: var(--mono); font-size: 0.88em; background: #f1f5f9; padding: 0.05rem 0.3rem; border-radius: 3px; }
+  .formula {
+    background: #f8fafc;
+    border-left: 3px solid var(--blue);
+    padding: 0.5rem 0.75rem;
+    margin: 0.5rem 0;
+    font-family: var(--mono);
+    font-size: 0.88rem;
+    border-radius: 0 4px 4px 0;
+  }
+  .formula .lbl { color: var(--text-dim); margin-right: 0.4rem; }
+
+  dl.params { margin: 0; font-size: 0.9rem; }
+  dl.params dt { font-weight: 600; display: inline; color: var(--slate); }
+  dl.params dt::after { content: ': '; }
+  dl.params dd { margin: 0 0 0.25rem 0; display: inline; font-family: var(--mono); }
+  dl.params dd::after { content: '\A'; white-space: pre; }
+
+  svg { width: 100%; height: auto; display: block; }
+  .svg-wrap {
+    background: #fafbfc;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.5rem;
+  }
+  .scale-note {
+    text-align: center;
+    margin-top: 0.4rem;
+    color: var(--text-dim);
+    font-size: 0.8rem;
+    font-family: var(--mono);
+  }
+
+  .subtest-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem;
+    margin-bottom: 0.6rem;
+  }
+  @media (max-width: 600px) { .subtest-grid { grid-template-columns: 1fr; } }
+  .subtest {
+    background: #f8fafc;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.6rem 0.75rem;
+  }
+  .subtest .top {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 0.25rem;
+  }
+  .subtest .name { font-weight: 600; font-size: 0.9rem; }
+  .subtest .desc { font-size: 0.82rem; color: var(--text-dim); }
+  .badge.sm { font-size: 0.7rem; padding: 0.1rem 0.4rem; }
+
+  .note {
+    background: var(--orange-light);
+    border-left: 3px solid var(--orange);
+    padding: 0.5rem 0.8rem;
+    margin: 1rem 0 0 0;
+    font-size: 0.88rem;
+    border-radius: 0 4px 4px 0;
+  }
+  .note strong { color: #9a3412; }
+
+  footer {
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: 0.85rem;
+  }
+  footer code { background: #e2e8f0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<header>
+  <h1>BeamLib · Batch 2A EB2D Test Results</h1>
+  <p class="subtitle">Branch <code>feat/batch-2a-eb2d-core</code> · 2D Euler–Bernoulli element + sparse assembly + Newton–Raphson static solve</p>
+</header>
+
+<div class="summary">
+  <div class="stat">
+    <div class="stat-label">Tests</div>
+    <div class="stat-value pass">4 / 4 PASS</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Compiler</div>
+    <div class="stat-value" style="font-size:1.05rem; padding-top:0.5rem;">GCC 15.2 (UCRT64)</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Warnings</div>
+    <div class="stat-value pass">0</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">NR iterations</div>
+    <div class="stat-value pass">1 (linear)</div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- TEST 1: CANTILEVER -->
+<!-- ============================================================ -->
+<section class="test-card">
+  <div class="test-header">
+    <div class="left">
+      <h2 class="test-title">Cantilever under tip transverse load</h2>
+      <span class="test-id">test_eb2d_cantilever.cpp</span>
+    </div>
+    <span class="badge pass">PASS</span>
+  </div>
+  <p class="test-summary">10-element cantilever with point load <code>F<sub>z</sub> = −1000 N</code> at the tip. Verifies the bending stiffness assembly, NR convergence, and the structural-convention sign of <code>θ<sub>y</sub></code> under a downward load.</p>
+
+  <div class="test-body">
+    <div class="panel">
+      <h3>Setup</h3>
+      <dl class="params">
+        <dt>E</dt><dd>200 × 10<sup>9</sup> Pa</dd>
+        <dt>A</dt><dd>0.01 m²</dd>
+        <dt>I<sub>z</sub></dt><dd>8.333 × 10<sup>−6</sup> m⁴</dd>
+        <dt>L</dt><dd>1.0 m</dd>
+        <dt>Mesh</dt><dd>10 EB2D elements, 11 nodes</dd>
+        <dt>BC</dt><dd>node 0 fully fixed</dd>
+        <dt>Load</dt><dd>F<sub>z</sub> = −1000 N at node 10 (tip, downward)</dd>
+      </dl>
+
+      <h3 style="margin-top:1rem;">Analytical solution</h3>
+      <div class="formula"><span class="lbl">u<sub>z</sub>(L) =</span> F<sub>z</sub>·L³ / (3·E·I<sub>z</sub>) = −2.00008 × 10⁻⁴ m</div>
+      <div class="formula"><span class="lbl">θ<sub>y</sub>(L) =</span> F<sub>z</sub>·L² / (2·E·I<sub>z</sub>) = −3.00012 × 10⁻⁴ rad</div>
+
+      <h3 style="margin-top:1rem;">Results</h3>
+      <table>
+        <thead><tr><th>Quantity</th><th>Analytical</th><th>FEM</th><th>Rel. error</th></tr></thead>
+        <tbody>
+          <tr><td>u<sub>z</sub>(L)</td><td class="num">−2.00008e−4</td><td class="num">−2.00008e−4</td><td class="err-ok">2.9e−13</td></tr>
+          <tr><td>θ<sub>y</sub>(L)</td><td class="num">−3.00012e−4</td><td class="num">−3.00012e−4</td><td class="err-ok">2.9e−13</td></tr>
+          <tr><td>u<sub>x</sub>(L)</td><td class="num">0</td><td class="num">0</td><td class="err-ok">&lt; 1e−14</td></tr>
+          <tr><td>NR iterations</td><td class="num">1</td><td class="num">1</td><td class="err-ok">exact</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="panel">
+      <h3>Deformed shape</h3>
+      <div class="svg-wrap">
+        <svg viewBox="0 0 800 240" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace, monospace" font-size="11">
+          <!-- Defs: hatched pattern for fixed support -->
+          <defs>
+            <pattern id="hatch1" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)">
+              <line x1="0" y1="0" x2="0" y2="6" stroke="#475569" stroke-width="1.2"/>
+            </pattern>
+            <marker id="arrowDown1" viewBox="0 0 10 10" refX="5" refY="9" markerWidth="10" markerHeight="10" orient="auto">
+              <path d="M 0 0 L 5 10 L 10 0 z" fill="#ea580c"/>
+            </marker>
+            <marker id="arrowAxis1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/>
+            </marker>
+          </defs>
+
+          <!-- Reference frame (small, top-left) -->
+          <g transform="translate(28,178)" stroke="#475569" fill="#475569">
+            <line x1="0" y1="0" x2="30" y2="0" stroke-width="1.2" marker-end="url(#arrowAxis1)"/>
+            <line x1="0" y1="0" x2="0" y2="-30" stroke-width="1.2" marker-end="url(#arrowAxis1)"/>
+            <text x="34" y="4">x</text>
+            <text x="-3" y="-34">z</text>
+          </g>
+
+          <!-- Fixed support hatched block -->
+          <rect x="78" y="60" width="22" height="120" fill="url(#hatch1)" stroke="#475569" stroke-width="1.2"/>
+          <line x1="100" y1="60" x2="100" y2="180" stroke="#475569" stroke-width="2"/>
+
+          <!-- Undeformed beam (reference) -->
+          <line x1="100" y1="120" x2="700" y2="120" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4 3"/>
+
+          <!-- Deformed beam (cubic w(x) = F_z x^2 (3L-x) / (6EI), scaled 250000x for visibility) -->
+          <path d="M 100,120 L 160,120.725 L 220,122.8 L 280,126.075 L 340,130.4 L 400,135.625 L 460,141.6 L 520,148.175 L 580,155.2 L 640,162.525 L 700,170"
+                stroke="#dc2626" stroke-width="2.4" fill="none" stroke-linejoin="round"/>
+
+          <!-- Node markers on deformed shape -->
+          <circle cx="100" cy="120" r="3.5" fill="#1f2937"/>
+          <circle cx="160" cy="120.725" r="2.5" fill="#dc2626"/>
+          <circle cx="220" cy="122.8" r="2.5" fill="#dc2626"/>
+          <circle cx="280" cy="126.075" r="2.5" fill="#dc2626"/>
+          <circle cx="340" cy="130.4" r="2.5" fill="#dc2626"/>
+          <circle cx="400" cy="135.625" r="2.5" fill="#dc2626"/>
+          <circle cx="460" cy="141.6" r="2.5" fill="#dc2626"/>
+          <circle cx="520" cy="148.175" r="2.5" fill="#dc2626"/>
+          <circle cx="580" cy="155.2" r="2.5" fill="#dc2626"/>
+          <circle cx="640" cy="162.525" r="2.5" fill="#dc2626"/>
+          <circle cx="700" cy="170" r="3.5" fill="#dc2626"/>
+
+          <!-- Tip force arrow -->
+          <line x1="700" y1="125" x2="700" y2="200" stroke="#ea580c" stroke-width="2.5" marker-end="url(#arrowDown1)"/>
+          <text x="708" y="180" fill="#ea580c" font-weight="600">F<tspan font-size="9" baseline-shift="-2">z</tspan> = −1000 N</text>
+
+          <!-- Annotations -->
+          <text x="50" y="55" fill="#475569" font-size="10">fixed</text>
+          <text x="50" y="68" fill="#475569" font-size="10">(node 0)</text>
+
+          <text x="660" y="100" fill="#dc2626" font-weight="600">tip</text>
+          <text x="660" y="113" fill="#dc2626" font-size="10">u<tspan font-size="9" baseline-shift="-2">z</tspan> = −2.0e−4 m</text>
+
+          <!-- Beam label -->
+          <text x="370" y="105" fill="#94a3b8" font-size="10" font-style="italic">undeformed (L = 1.0 m)</text>
+        </svg>
+      </div>
+      <div class="scale-note">vertical displacement scaled ×250,000 for visibility</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- TEST 2: PATCH -->
+<!-- ============================================================ -->
+<section class="test-card">
+  <div class="test-header">
+    <div class="left">
+      <h2 class="test-title">Patch test (4 sub-checks)</h2>
+      <span class="test-id">test_eb2d_patch.cpp</span>
+    </div>
+    <span class="badge pass">PASS</span>
+  </div>
+  <p class="test-summary">Element-level numerical sanity checks: stiffness-matrix entries vs. analytical formulas, rigid-body translation producing zero internal force, constant-strain axial patch test, and the structural-convention sign check for θ<sub>y</sub>.</p>
+
+  <div class="test-body">
+    <div class="panel">
+      <h3>Sub-tests</h3>
+      <div class="subtest-grid">
+        <div class="subtest">
+          <div class="top">
+            <span class="name">2.1 Stiffness entries</span>
+            <span class="badge pass sm">PASS</span>
+          </div>
+          <div class="desc">Direct comparison of <code>k<sub>l</sub>(i,j)</code> entries against the closed-form expressions <code>EA/L</code>, <code>12EI<sub>z</sub>/L³</code>, <code>6EI<sub>z</sub>/L²</code>, <code>4EI<sub>z</sub>/L</code>, <code>2EI<sub>z</sub>/L</code>. Tolerance: relative <code>1e−12</code>. Also verifies <code>k<sub>l</sub> = k<sub>l</sub><sup>T</sup></code> (symmetry within <code>1e−14</code>).</div>
+        </div>
+        <div class="subtest">
+          <div class="top">
+            <span class="name">2.2 Rigid translation</span>
+            <span class="badge pass sm">PASS</span>
+          </div>
+          <div class="desc">All DOFs set to the same rigid translation <code>(u<sub>x</sub>, u<sub>z</sub>, 0)</code>. Element residual <code>r<sub>l</sub> = k<sub>l</sub> d<sub>l</sub></code> evaluates to <code>‖r<sub>l</sub>‖ &lt; 1e−12</code> (machine zero).</div>
+        </div>
+        <div class="subtest">
+          <div class="top">
+            <span class="name">2.3 Constant axial strain</span>
+            <span class="badge pass sm">PASS</span>
+          </div>
+          <div class="desc">5-element chain with bending DOFs locked. Axial tip load <code>F<sub>x</sub> = 5000 N</code>. Solution must give <code>u<sub>x</sub>(x) = (F<sub>x</sub>/EA)·x</code> exactly — verified at every internal node to relative <code>1e−10</code>.</div>
+        </div>
+        <div class="subtest">
+          <div class="top">
+            <span class="name">2.4 θ<sub>y</sub> sign under F<sub>z</sub></span>
+            <span class="badge pass sm">PASS</span>
+          </div>
+          <div class="desc">Single-element cantilever, <code>F<sub>z</sub> = −1000 N</code> at the tip. Asserts <code>u<sub>z</sub>(L) &lt; 0</code> <em>and</em> <code>θ<sub>y</sub>(L) &lt; 0</code> — the cross-check anchoring the BeamLib structural convention <code>θ<sub>y</sub> = dw/dx</code>.</div>
+        </div>
+      </div>
+
+      <h3 style="margin-top:1rem;">Sample stiffness check (L = 2.5, EA = 4×10⁹, EI<sub>z</sub> = 2×10⁶)</h3>
+      <table>
+        <thead><tr><th>Entry</th><th>Formula</th><th>Computed</th><th>Rel. err</th></tr></thead>
+        <tbody>
+          <tr><td><code>k(0,0)</code></td><td class="num">EA/L = 1.6e9</td><td class="num">1.6e9</td><td class="err-ok">&lt; 1e−15</td></tr>
+          <tr><td><code>k(1,1)</code></td><td class="num">12EI/L³ = 1.536e6</td><td class="num">1.536e6</td><td class="err-ok">&lt; 1e−15</td></tr>
+          <tr><td><code>k(2,2)</code></td><td class="num">4EI/L = 3.2e6</td><td class="num">3.2e6</td><td class="err-ok">&lt; 1e−15</td></tr>
+          <tr><td><code>k(1,2)</code></td><td class="num">6EI/L² = 1.92e6</td><td class="num">1.92e6</td><td class="err-ok">&lt; 1e−15</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="panel">
+      <h3>Sub-test 2.3: constant axial strain</h3>
+      <div class="svg-wrap">
+        <svg viewBox="0 0 800 200" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace, monospace" font-size="11">
+          <defs>
+            <pattern id="hatch2" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)">
+              <line x1="0" y1="0" x2="0" y2="6" stroke="#475569" stroke-width="1.2"/>
+            </pattern>
+            <marker id="arrowRight2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#ea580c"/>
+            </marker>
+          </defs>
+
+          <!-- Fixed wall -->
+          <rect x="78" y="70" width="22" height="60" fill="url(#hatch2)" stroke="#475569" stroke-width="1.2"/>
+          <line x1="100" y1="70" x2="100" y2="130" stroke="#475569" stroke-width="2"/>
+          <text x="60" y="60" fill="#475569" font-size="10">fixed u<tspan font-size="9" baseline-shift="-2">x</tspan></text>
+
+          <!-- Undeformed mesh -->
+          <line x1="100" y1="100" x2="660" y2="100" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4 3"/>
+          <text x="370" y="92" fill="#94a3b8" font-size="10" font-style="italic">undeformed (5 elements, L = 2.0 m)</text>
+
+          <!-- Deformed mesh: nodes shifted right proportional to position. Total elongation 50 px (visualization scale) -->
+          <!-- u(x) = (Fx/EA)·x. With Fx=5000, EA=2e9 (E=200e9 A=0.01): u_tip = 5e-6 m. Scaled by 1e7 = 50 px -->
+          <line x1="100" y1="120" x2="710" y2="120" stroke="#2563eb" stroke-width="2.4"/>
+          <!-- Deformed node positions: 100, 222, 344, 466, 588, 710 (linear, +10 per node from undeformed 100..660 step 112) -->
+          <!-- Actually undeformed spacing 112 px (560/5). Deformed adds linear displacement, total stretched to 610 px. New positions: 100, 222, 344, 466, 588, 710 -->
+          <circle cx="100" cy="120" r="3.5" fill="#1e3a8a"/>
+          <circle cx="222" cy="120" r="3" fill="#2563eb"/>
+          <circle cx="344" cy="120" r="3" fill="#2563eb"/>
+          <circle cx="466" cy="120" r="3" fill="#2563eb"/>
+          <circle cx="588" cy="120" r="3" fill="#2563eb"/>
+          <circle cx="710" cy="120" r="3.5" fill="#2563eb"/>
+
+          <!-- Undeformed nodes (for reference) -->
+          <circle cx="100" cy="100" r="2" fill="#cbd5e1"/>
+          <circle cx="212" cy="100" r="2" fill="#cbd5e1"/>
+          <circle cx="324" cy="100" r="2" fill="#cbd5e1"/>
+          <circle cx="436" cy="100" r="2" fill="#cbd5e1"/>
+          <circle cx="548" cy="100" r="2" fill="#cbd5e1"/>
+          <circle cx="660" cy="100" r="2" fill="#cbd5e1"/>
+
+          <!-- Connecting lines showing displacement of each node -->
+          <line x1="212" y1="100" x2="222" y2="120" stroke="#cbd5e1" stroke-width="0.8" stroke-dasharray="2 2"/>
+          <line x1="324" y1="100" x2="344" y2="120" stroke="#cbd5e1" stroke-width="0.8" stroke-dasharray="2 2"/>
+          <line x1="436" y1="100" x2="466" y2="120" stroke="#cbd5e1" stroke-width="0.8" stroke-dasharray="2 2"/>
+          <line x1="548" y1="100" x2="588" y2="120" stroke="#cbd5e1" stroke-width="0.8" stroke-dasharray="2 2"/>
+          <line x1="660" y1="100" x2="710" y2="120" stroke="#cbd5e1" stroke-width="0.8" stroke-dasharray="2 2"/>
+
+          <!-- Tip force -->
+          <line x1="720" y1="120" x2="770" y2="120" stroke="#ea580c" stroke-width="2.5" marker-end="url(#arrowRight2)"/>
+          <text x="725" y="138" fill="#ea580c" font-weight="600" font-size="10">F<tspan font-size="9" baseline-shift="-2">x</tspan> = 5000 N</text>
+
+          <!-- Annotation -->
+          <text x="120" y="160" fill="#2563eb" font-size="10">u(x) = (F<tspan font-size="9" baseline-shift="-2">x</tspan>/EA)·x — linear in x</text>
+          <text x="120" y="174" fill="#16a34a" font-size="10">node displacement matches analytical to &lt; 1e−10 (relative)</text>
+        </svg>
+      </div>
+      <div class="scale-note">axial displacement scaled ×1×10⁷ (true u<sub>tip</sub> = 5×10⁻⁷ m)</div>
+
+      <h3 style="margin-top:1rem;">Other sub-tests (compact)</h3>
+      <table>
+        <thead><tr><th>Sub-test</th><th>Quantity checked</th><th>Result</th></tr></thead>
+        <tbody>
+          <tr><td>2.1 stiffness entries</td><td>13 nonzero <code>k(i,j)</code></td><td class="err-ok">all match analytical &lt; 1e−15</td></tr>
+          <tr><td>2.2 rigid translation</td><td>‖r<sub>l</sub>‖</td><td class="err-ok">&lt; 1e−12 (absolute)</td></tr>
+          <tr><td>2.4 θ<sub>y</sub> sign under F<sub>z</sub>&lt;0</td><td>sign(u<sub>z</sub>), sign(θ<sub>y</sub>)</td><td class="err-ok">both negative, as required</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- TEST 3: PURE END MOMENT -->
+<!-- ============================================================ -->
+<section class="test-card">
+  <div class="test-header">
+    <div class="left">
+      <h2 class="test-title">Cantilever under pure end moment</h2>
+      <span class="test-id">test_eb2d_moment.cpp</span>
+    </div>
+    <span class="badge pass">PASS</span>
+  </div>
+  <p class="test-summary">10-element cantilever with a pure couple <code>M<sub>y</sub> = +500 N·m</code> at the tip. Curvature is constant along the span, the deflection is a perfect quadratic, and the rotation is linear. Verifies bending-only response and the positive-moment / positive-rotation / positive-deflection sign chain.</p>
+
+  <div class="test-body">
+    <div class="panel">
+      <h3>Setup</h3>
+      <dl class="params">
+        <dt>E, A, I<sub>z</sub>, L</dt><dd>identical to test 1</dd>
+        <dt>Mesh</dt><dd>10 EB2D elements, 11 nodes</dd>
+        <dt>BC</dt><dd>node 0 fully fixed</dd>
+        <dt>Load</dt><dd>M<sub>y</sub> = +500 N·m at node 10 (tip couple)</dd>
+      </dl>
+
+      <h3 style="margin-top:1rem;">Analytical solution</h3>
+      <div class="formula"><span class="lbl">u<sub>z</sub>(x) =</span> M<sub>y</sub>·x² / (2·E·I<sub>z</sub>)  — quadratic</div>
+      <div class="formula"><span class="lbl">θ<sub>y</sub>(x) =</span> M<sub>y</sub>·x / (E·I<sub>z</sub>)  — linear</div>
+      <div class="formula"><span class="lbl">u<sub>z</sub>(L) =</span> 1.50006 × 10⁻⁴ m</div>
+      <div class="formula"><span class="lbl">θ<sub>y</sub>(L) =</span> 3.00012 × 10⁻⁴ rad</div>
+
+      <h3 style="margin-top:1rem;">Results</h3>
+      <table>
+        <thead><tr><th>Quantity</th><th>Analytical</th><th>FEM</th><th>Rel. error</th></tr></thead>
+        <tbody>
+          <tr><td>u<sub>z</sub>(L)</td><td class="num">+1.50006e−4</td><td class="num">+1.50006e−4</td><td class="err-ok">&lt; 1e−12</td></tr>
+          <tr><td>θ<sub>y</sub>(L)</td><td class="num">+3.00012e−4</td><td class="num">+3.00012e−4</td><td class="err-ok">&lt; 1e−12</td></tr>
+          <tr><td>u<sub>z</sub>(0.5L)</td><td class="num">+3.7502e−5</td><td class="num">+3.7502e−5</td><td class="err-ok">&lt; 1e−12</td></tr>
+          <tr><td>θ<sub>y</sub>(0.5L)</td><td class="num">+1.50006e−4</td><td class="num">+1.50006e−4</td><td class="err-ok">&lt; 1e−12</td></tr>
+          <tr><td>NR iterations</td><td class="num">1</td><td class="num">1</td><td class="err-ok">exact</td></tr>
+        </tbody>
+      </table>
+      <p class="test-summary" style="margin-top:0.8rem; font-size:0.85rem;">Cubic Hermite interpolation reproduces any quadratic deflection exactly, so the relative error is at round-off level for every node, not only the tip.</p>
+    </div>
+
+    <div class="panel">
+      <h3>Deformed shape</h3>
+      <div class="svg-wrap">
+        <svg viewBox="0 0 800 240" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace, monospace" font-size="11">
+          <defs>
+            <pattern id="hatch3" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)">
+              <line x1="0" y1="0" x2="0" y2="6" stroke="#475569" stroke-width="1.2"/>
+            </pattern>
+            <marker id="arrowAxis3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/>
+            </marker>
+            <marker id="momentArrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#7c3aed"/>
+            </marker>
+          </defs>
+
+          <!-- Reference frame -->
+          <g transform="translate(28,200)" stroke="#475569" fill="#475569">
+            <line x1="0" y1="0" x2="30" y2="0" stroke-width="1.2" marker-end="url(#arrowAxis3)"/>
+            <line x1="0" y1="0" x2="0" y2="-30" stroke-width="1.2" marker-end="url(#arrowAxis3)"/>
+            <text x="34" y="4">x</text>
+            <text x="-3" y="-34">z</text>
+          </g>
+
+          <!-- Fixed support -->
+          <rect x="78" y="80" width="22" height="120" fill="url(#hatch3)" stroke="#475569" stroke-width="1.2"/>
+          <line x1="100" y1="80" x2="100" y2="200" stroke="#475569" stroke-width="2"/>
+
+          <!-- Undeformed beam -->
+          <line x1="100" y1="140" x2="700" y2="140" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4 3"/>
+
+          <!-- Deformed: w(x) = 1.5e-4 x^2, scaled 250000x. Path goes UP (positive z) -->
+          <path d="M 100,140 L 160,139.625 L 220,138.5 L 280,136.625 L 340,134.0 L 400,130.625 L 460,126.5 L 520,121.625 L 580,116.0 L 640,109.625 L 700,102.5"
+                stroke="#dc2626" stroke-width="2.4" fill="none" stroke-linejoin="round"/>
+
+          <!-- Node markers -->
+          <circle cx="100" cy="140" r="3.5" fill="#1f2937"/>
+          <circle cx="160" cy="139.625" r="2.5" fill="#dc2626"/>
+          <circle cx="220" cy="138.5" r="2.5" fill="#dc2626"/>
+          <circle cx="280" cy="136.625" r="2.5" fill="#dc2626"/>
+          <circle cx="340" cy="134.0" r="2.5" fill="#dc2626"/>
+          <circle cx="400" cy="130.625" r="2.5" fill="#dc2626"/>
+          <circle cx="460" cy="126.5" r="2.5" fill="#dc2626"/>
+          <circle cx="520" cy="121.625" r="2.5" fill="#dc2626"/>
+          <circle cx="580" cy="116.0" r="2.5" fill="#dc2626"/>
+          <circle cx="640" cy="109.625" r="2.5" fill="#dc2626"/>
+          <circle cx="700" cy="102.5" r="3.5" fill="#dc2626"/>
+
+          <!-- Moment couple at tip (curved arrow indicating positive +y rotation, CCW in xz-plane) -->
+          <!-- Positive M_y rotates +z toward +x in the structural convention; show CCW circular arrow -->
+          <path d="M 730 92 A 18 18 0 1 0 730 122" stroke="#7c3aed" stroke-width="2.5" fill="none" marker-end="url(#momentArrow)"/>
+          <text x="755" y="110" fill="#7c3aed" font-weight="600">M<tspan font-size="9" baseline-shift="-2">y</tspan></text>
+          <text x="755" y="124" fill="#7c3aed" font-size="10">= +500 N·m</text>
+
+          <!-- Annotations -->
+          <text x="50" y="75" fill="#475569" font-size="10">fixed</text>
+          <text x="50" y="88" fill="#475569" font-size="10">(node 0)</text>
+
+          <text x="610" y="92" fill="#dc2626" font-weight="600">tip</text>
+          <text x="580" y="78" fill="#dc2626" font-size="10">u<tspan font-size="9" baseline-shift="-2">z</tspan> = +1.5e−4 m</text>
+
+          <!-- Curvature note -->
+          <text x="320" y="225" fill="#475569" font-size="10" font-style="italic">κ = M<tspan font-size="9" baseline-shift="-2">y</tspan>/(EI<tspan font-size="9" baseline-shift="-2">z</tspan>) constant ⇒ u<tspan font-size="9" baseline-shift="-2">z</tspan>(x) is parabolic</text>
+
+          <text x="340" y="125" fill="#94a3b8" font-size="10" font-style="italic">undeformed</text>
+        </svg>
+      </div>
+      <div class="scale-note">vertical displacement scaled ×250,000 for visibility</div>
+    </div>
+  </div>
+
+  <div class="note">
+    <strong>Sign convention cross-check.</strong> Positive <code>M<sub>y</sub></code> gives positive <code>u<sub>z</sub>(L)</code> and positive <code>θ<sub>y</sub>(L)</code>, consistent with BeamLib's structural convention <code>θ<sub>y</sub> = dw/dx</code>. The visualization shows the beam curving <em>upward</em> (toward +z), which is the geometric meaning of a positive couple about +ŷ under this convention. See <code>docs/theory/01_euler_bernoulli_2d.tex</code> §2.4 and §10.
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- Build / Run info -->
+<!-- ============================================================ -->
+<section class="test-card" style="background: #f1f5f9;">
+  <h2 class="test-title" style="font-size:1.1rem;">Build &amp; run summary</h2>
+  <div class="test-body">
+    <div class="panel">
+      <h3>Build</h3>
+      <table>
+        <tbody>
+          <tr><td>CMake</td><td class="num">3.16+</td></tr>
+          <tr><td>Compiler</td><td class="num">GCC 15.2.0 (MSYS2 UCRT64)</td></tr>
+          <tr><td>C++ standard</td><td class="num">C++17</td></tr>
+          <tr><td>Eigen</td><td class="num">3.4.0 (header-only)</td></tr>
+          <tr><td>Library target</td><td class="num">beamlib (INTERFACE, header-only)</td></tr>
+          <tr><td>Warnings</td><td class="err-ok">0</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="panel">
+      <h3>CTest output</h3>
+      <pre style="background:#0f172a; color:#e2e8f0; padding:0.8rem 1rem; border-radius:6px; font-size:0.82rem; line-height:1.5; overflow-x:auto;">Test project C:/_Lucidia/Japhy/BeamLib/build
+    Start 1: test_compile_check
+1/4 Test #1: test_compile_check ...........  Passed 0.17 sec
+    Start 2: test_eb2d_cantilever
+2/4 Test #2: test_eb2d_cantilever .........  Passed 0.11 sec
+    Start 3: test_eb2d_patch
+3/4 Test #3: test_eb2d_patch ..............  Passed 0.11 sec
+    Start 4: test_eb2d_moment
+4/4 Test #4: test_eb2d_moment .............  Passed 0.13 sec
+
+100% tests passed, 0 tests failed out of 4
+Total Test time (real) = 0.53 sec</pre>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <p>Generated alongside the EB2D theory PDF at <code>docs/theory/01_euler_bernoulli_2d.pdf</code>. All numerical values come from the actual run of <code>test_eb2d_cantilever.exe</code>, <code>test_eb2d_patch.exe</code>, <code>test_eb2d_moment.exe</code>. The deformation curves in the SVGs are the analytical solutions (which the cubic-Hermite EB2D element reproduces to round-off), drawn with the displacement axis amplified for visibility — the scale factor is noted under each diagram.</p>
+</footer>
+
+</div>
+</body>
+</html>
