@@ -655,3 +655,58 @@ ctest --test-dir build --output-on-failure
 ### Recommendation
 
 Merge Batch 4 after commit/push.
+
+## Codex Review - Batch 5 Timoshenko3D
+
+### Status
+
+No findings. Batch 5 is merge-ready from the numerical-methods review side.
+
+### Verified
+
+- `include/BeamLib/Element/Timoshenko3D.h` keeps the required 3D DOF order
+  `[u_x, u_y, u_z, theta_x, theta_y, theta_z]`.
+- The two bending/shear planes are mapped correctly and independently:
+  - `u_y / theta_z` uses `EIz` and `kappa_y G A`
+  - `u_z / theta_y` uses `EIy` and `kappa_z G A`
+- `Phi_y` and `Phi_z` are defined separately and consistently with those two planes.
+- The 3D transformation path reuses the reviewed Batch 3 convention from
+  `BeamMath3D`: translations use `lambda`, rotations use `S * lambda * S`.
+- `ElementInternalForces` was extended coherently to the full 3D set
+  `{N, V_y, V_z, T_x, M_y, M_z}` without breaking the existing 2D consumers.
+- The mass implementation is explicit about:
+  - axial translational inertia
+  - torsional rotary inertia `rho * Ix`
+  - bending rotary inertia `rho * Iy` on `theta_y`
+  - bending rotary inertia `rho * Iz` on `theta_z`
+  and the theory document matches the implementation.
+- `docs/theory/04_timoshenko_3d.tex` is coherent with the code and documents:
+  - local-frame / transformation convention
+  - plane-to-property mapping
+  - separate `Phi_y`, `Phi_z`
+  - EB3D limit
+  - mass model and exclusions
+  - internal-force sign convention
+
+### Test Coverage Review
+
+- `tests/test_timo3d_cantilever.cpp` verifies analytical Timoshenko response in both bending planes.
+- `tests/test_timo3d_torsion.cpp` verifies the torsion block independently.
+- `tests/test_timo3d_slender_limit.cpp` verifies convergence to EB3D.
+- `tests/test_timo3d_deep_beam.cpp` verifies the expected extra shear flexibility relative to EB3D.
+- `tests/test_timo3d_shear_locking.cpp` exercises the coarse-mesh slender-beam case in both bending planes.
+- `tests/test_timo3d_transform.cpp` checks rotated loading, `refVector`-dependent plane reorientation, and rigid-body consistency under the inherited Batch 3 transform.
+- `tests/test_timo3d_phi_limit.cpp` directly verifies `Phi_y, Phi_z -> 0` degeneration to EB3D entry-by-entry.
+- `tests/test_timo3d_mass.cpp` covers local mass entries, Timo-vs-EB3D rotary-inertia delta, transformed-mass consistency, and two-element assembly behavior.
+
+### Local Verification
+
+```
+cmake --build build
+ctest --test-dir build --output-on-failure
+29/29 tests passed
+```
+
+### Recommendation
+
+Merge Batch 5 after commit/push.

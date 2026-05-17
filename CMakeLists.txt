@@ -134,3 +134,36 @@ add_test(NAME test_timo2d_phi_limit COMMAND test_timo2d_phi_limit)
 add_executable(test_timo2d_mass tests/test_timo2d_mass.cpp)
 target_link_libraries(test_timo2d_mass beamlib)
 add_test(NAME test_timo2d_mass COMMAND test_timo2d_mass)
+
+# --- Batch 5: Timoshenko 3D ---
+add_executable(test_timo3d_cantilever tests/test_timo3d_cantilever.cpp)
+target_link_libraries(test_timo3d_cantilever beamlib)
+add_test(NAME test_timo3d_cantilever COMMAND test_timo3d_cantilever)
+
+add_executable(test_timo3d_torsion tests/test_timo3d_torsion.cpp)
+target_link_libraries(test_timo3d_torsion beamlib)
+add_test(NAME test_timo3d_torsion COMMAND test_timo3d_torsion)
+
+add_executable(test_timo3d_slender_limit tests/test_timo3d_slender_limit.cpp)
+target_link_libraries(test_timo3d_slender_limit beamlib)
+add_test(NAME test_timo3d_slender_limit COMMAND test_timo3d_slender_limit)
+
+add_executable(test_timo3d_deep_beam tests/test_timo3d_deep_beam.cpp)
+target_link_libraries(test_timo3d_deep_beam beamlib)
+add_test(NAME test_timo3d_deep_beam COMMAND test_timo3d_deep_beam)
+
+add_executable(test_timo3d_shear_locking tests/test_timo3d_shear_locking.cpp)
+target_link_libraries(test_timo3d_shear_locking beamlib)
+add_test(NAME test_timo3d_shear_locking COMMAND test_timo3d_shear_locking)
+
+add_executable(test_timo3d_transform tests/test_timo3d_transform.cpp)
+target_link_libraries(test_timo3d_transform beamlib)
+add_test(NAME test_timo3d_transform COMMAND test_timo3d_transform)
+
+add_executable(test_timo3d_phi_limit tests/test_timo3d_phi_limit.cpp)
+target_link_libraries(test_timo3d_phi_limit beamlib)
+add_test(NAME test_timo3d_phi_limit COMMAND test_timo3d_phi_limit)
+
+add_executable(test_timo3d_mass tests/test_timo3d_mass.cpp)
+target_link_libraries(test_timo3d_mass beamlib)
+add_test(NAME test_timo3d_mass COMMAND test_timo3d_mass)

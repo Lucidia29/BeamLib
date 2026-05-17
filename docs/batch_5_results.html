@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>BeamLib — Batch 5 Timoshenko 3D Test Results</title>
+<style>
+  :root {
+    --bg: #f8fafc;
+    --card: #ffffff;
+    --text: #0f172a;
+    --text-dim: #64748b;
+    --border: #e2e8f0;
+    --border-strong: #cbd5e1;
+    --blue: #2563eb;
+    --blue-light: #dbeafe;
+    --red: #dc2626;
+    --red-light: #fee2e2;
+    --green: #16a34a;
+    --green-light: #dcfce7;
+    --orange: #ea580c;
+    --orange-light: #ffedd5;
+    --violet: #7c3aed;
+    --violet-light: #ede9fe;
+    --slate: #475569;
+    --mono: ui-monospace, 'Cascadia Code', 'Consolas', Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    padding: 2rem 1rem;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+                 'Microsoft YaHei', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.55;
+  }
+  .container { max-width: 1180px; margin: 0 auto; }
+  header { padding-bottom: 1rem; margin-bottom: 1.5rem; border-bottom: 2px solid var(--border); }
+  header h1 { margin: 0 0 0.3rem 0; font-size: 1.75rem; letter-spacing: -0.01em; }
+  .subtitle { color: var(--text-dim); font-size: 0.95rem; margin: 0; }
+  .subtitle code { background: #e2e8f0; padding: 0.05rem 0.4rem; border-radius: 3px; font-size: 0.9em; }
+  .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin: 1.25rem 0 2rem 0; }
+  .stat { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 0.9rem 1rem; }
+  .stat-label { font-size: 0.78rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+  .stat-value { font-size: 1.5rem; font-weight: 600; margin-top: 0.2rem; font-family: var(--mono); }
+  .stat-value.pass { color: var(--green); }
+  .test-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1.4rem 1.5rem; margin-bottom: 1.5rem; box-shadow: 0 1px 2px rgba(15,23,42,0.04); }
+  .test-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.4rem; }
+  .test-header .left { display: flex; align-items: baseline; gap: 0.6rem; flex-wrap: wrap; }
+  .test-title { font-size: 1.25rem; font-weight: 600; margin: 0; }
+  .test-id { color: var(--text-dim); font-family: var(--mono); font-size: 0.85rem; }
+  .badge { display: inline-block; padding: 0.2rem 0.55rem; border-radius: 999px; font-size: 0.78rem; font-weight: 600; letter-spacing: 0.03em; }
+  .badge.pass { background: var(--green-light); color: var(--green); }
+  .badge.new  { background: var(--blue-light); color: var(--blue); }
+  .badge.key  { background: var(--violet-light); color: var(--violet); }
+  .test-summary { color: var(--text-dim); margin: 0 0 1rem 0; font-size: 0.95rem; }
+  .test-body { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 1.5rem; align-items: start; }
+  @media (max-width: 820px) { .test-body { grid-template-columns: 1fr; } }
+  .panel h3 { margin: 0 0 0.6rem 0; font-size: 0.78rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.06em; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  th, td { padding: 0.4rem 0.55rem; text-align: left; border-bottom: 1px solid var(--border); }
+  th { font-weight: 600; color: var(--text-dim); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; }
+  td.num { font-family: var(--mono); text-align: right; white-space: nowrap; }
+  .err-ok { color: var(--green); font-family: var(--mono); font-size: 0.88rem; }
+  code { font-family: var(--mono); font-size: 0.88em; background: #f1f5f9; padding: 0.05rem 0.3rem; border-radius: 3px; }
+  .formula { background: #f8fafc; border-left: 3px solid var(--blue); padding: 0.5rem 0.75rem; margin: 0.5rem 0; font-family: var(--mono); font-size: 0.88rem; border-radius: 0 4px 4px 0; }
+  .formula .lbl { color: var(--text-dim); margin-right: 0.4rem; }
+  dl.params { margin: 0; font-size: 0.9rem; }
+  dl.params dt { font-weight: 600; display: inline; color: var(--slate); }
+  dl.params dt::after { content: ': '; }
+  dl.params dd { margin: 0 0 0.25rem 0; display: inline; font-family: var(--mono); }
+  dl.params dd::after { content: '\A'; white-space: pre; }
+  svg { width: 100%; height: auto; display: block; }
+  .svg-wrap { background: #fafbfc; border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem; }
+  .scale-note { text-align: center; margin-top: 0.4rem; color: var(--text-dim); font-size: 0.8rem; font-family: var(--mono); }
+  .subtest-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; margin-bottom: 0.6rem; }
+  @media (max-width: 600px) { .subtest-grid { grid-template-columns: 1fr; } }
+  .subtest { background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem 0.75rem; }
+  .subtest .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem; }
+  .subtest .name { font-weight: 600; font-size: 0.9rem; }
+  .subtest .desc { font-size: 0.82rem; color: var(--text-dim); }
+  .badge.sm { font-size: 0.7rem; padding: 0.1rem 0.4rem; }
+  .note { background: var(--orange-light); border-left: 3px solid var(--orange); padding: 0.5rem 0.8rem; margin: 1rem 0 0 0; font-size: 0.88rem; border-radius: 0 4px 4px 0; }
+  .note strong { color: #9a3412; }
+  .note.info { background: var(--violet-light); border-left-color: var(--violet); }
+  .note.info strong { color: #5b21b6; }
+  footer { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border); color: var(--text-dim); font-size: 0.85rem; }
+  footer code { background: #e2e8f0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<header>
+  <h1>BeamLib · Batch 5 Timoshenko 3D</h1>
+  <p class="subtitle">Branch <code>feat/batch-5-timo3d</code> · 12-DOF spatial Timoshenko element with two independent Φ-corrected bending/shear planes and full 3D internal forces</p>
+</header>
+
+<div class="summary">
+  <div class="stat">
+    <div class="stat-label">New tests (Batch 5)</div>
+    <div class="stat-value pass">8 / 8 PASS</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Total (Batches 1–5)</div>
+    <div class="stat-value pass">29 / 29 PASS</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Codex findings</div>
+    <div class="stat-value pass">none</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Φ per plane</div>
+    <div class="stat-value pass">Φ<sub>y</sub>, Φ<sub>z</sub></div>
+  </div>
+</div>
+
+<div class="note info" style="margin: 0 0 1.5rem 0;">
+  <strong>What Batch 5 adds.</strong> 3D Timoshenko beam with the same DOF order as EB3D, composed of <strong>axial + St. Venant torsion + two independent Φ-corrected bending/shear planes</strong>. The xy plane uses <code>EI<sub>z</sub></code> and <code>κ<sub>y</sub>·G·A</code> (Φ<sub>y</sub> = 12 EI<sub>z</sub>/(κ<sub>y</sub> GA L²)); the xz plane uses <code>EI<sub>y</sub></code> and <code>κ<sub>z</sub>·G·A</code> (Φ<sub>z</sub> = 12 EI<sub>y</sub>/(κ<sub>z</sub> GA L²)). <code>κ<sub>y</sub></code> and <code>κ<sub>z</sub></code> stay independent throughout. Transformation reuses Batch 3's <code>S·λ·S</code> rotation adapter via <code>BeamMath3D::buildTransformation3D</code>. Mass adds two rotary-inertia deltas (<code>ρ·I<sub>y</sub></code> on θ<sub>y</sub>, <code>ρ·I<sub>z</sub></code> on θ<sub>z</sub>) on top of EB3D mass. <code>ElementInternalForces</code> was extended to carry the full 3D set <code>{N, V<sub>y</sub>, V<sub>z</sub>, T<sub>x</sub>, M<sub>y</sub>, M<sub>z</sub>}</code>.
+</div>
+
+<!-- ============================================================ -->
+<!-- TEST 1: CANTILEVER (two planes) -->
+<!-- ============================================================ -->
+<section class="test-card">
+  <div class="test-header">
+    <div class="left">
+      <h2 class="test-title">3D cantilever in both bending planes</h2>
+      <span class="test-id">test_timo3d_cantilever.cpp</span>
+      <span class="badge new">NEW</span>
+      <span class="badge key">KEY</span>
+    </div>
+    <span class="badge pass">PASS</span>
+  </div>
+  <p class="test-summary">10-element cantilever along +x with <code>I<sub>y</sub> ≠ I<sub>z</sub></code> and <code>κ<sub>y</sub> ≠ κ<sub>z</sub></code> so each bending plane has a distinct analytical answer. The Φ-corrected closed-form Timoshenko cantilever formula must hold independently in each plane.</p>
+
+  <div class="test-body">
+    <div class="panel">
+      <h3>Setup</h3>
+      <dl class="params">
+        <dt>E, G</dt><dd>200 × 10⁹ Pa, 80 × 10⁹ Pa</dd>
+        <dt>A</dt><dd>0.01 m²</dd>
+        <dt>I<sub>y</sub>, I<sub>z</sub></dt><dd>8 × 10⁻⁶, 1.6 × 10⁻⁵ m⁴ (asymmetric)</dd>
+        <dt>κ<sub>y</sub>, κ<sub>z</sub></dt><dd>5/6, 0.85 (independent)</dd>
+        <dt>L, mesh</dt><dd>1.0 m, 10 elements</dd>
+        <dt>BC</dt><dd>node 0 fully fixed (all 6 DOFs)</dd>
+      </dl>
+
+      <h3 style="margin-top:1rem;">Subtest 1: F<sub>z</sub> = −1000 N (xz plane → EI<sub>y</sub>, κ<sub>z</sub>·GA)</h3>
+      <div class="formula"><span class="lbl">u<sub>z</sub>(L) =</span> F<sub>z</sub>·L³/(3·E·I<sub>y</sub>) + F<sub>z</sub>·L/(κ<sub>z</sub>·G·A) = −2.09804 × 10⁻⁴ m</div>
+      <div class="formula"><span class="lbl">θ<sub>y</sub>(L) =</span> F<sub>z</sub>·L²/(2·E·I<sub>y</sub>) = −3.125 × 10⁻⁴ rad</div>
+
+      <h3 style="margin-top:1rem;">Subtest 2: F<sub>y</sub> = −1000 N (xy plane → EI<sub>z</sub>, κ<sub>y</sub>·GA)</h3>
+      <div class="formula"><span class="lbl">u<sub>y</sub>(L) =</span> F<sub>y</sub>·L³/(3·E·I<sub>z</sub>) + F<sub>y</sub>·L/(κ<sub>y</sub>·G·A) = −1.05667 × 10⁻⁴ m</div>
+      <div class="formula"><span class="lbl">θ<sub>z</sub>(L) =</span> F<sub>y</sub>·L²/(2·E·I<sub>z</sub>) = −1.5625 × 10⁻⁴ rad</div>
+
+      <h3 style="margin-top:1rem;">Results</h3>
+      <table>
+        <thead><tr><th>Quantity</th><th>FEM</th><th>Rel. err</th></tr></thead>
+        <tbody>
+          <tr><td>F<sub>z</sub>: u<sub>z</sub>(L)</td><td class="num">−2.09804 × 10⁻⁴</td><td class="err-ok">&lt; 1e−9</td></tr>
+          <tr><td>F<sub>z</sub>: θ<sub>y</sub>(L)</td><td class="num">−3.125 × 10⁻⁴</td><td class="err-ok">&lt; 1e−9</td></tr>
+          <tr><td>F<sub>y</sub>: u<sub>y</sub>(L)</td><td class="num">−1.05667 × 10⁻⁴</td><td class="err-ok">&lt; 1e−9</td></tr>
+          <tr><td>F<sub>y</sub>: θ<sub>z</sub>(L)</td><td class="num">−1.5625 × 10⁻⁴</td><td class="err-ok">&lt; 1e−9</td></tr>
+          <tr><td>NR iterations (each)</td><td class="num">1</td><td class="err-ok">exact</td></tr>
+          <tr><td>Unrelated DOFs at tip</td><td class="num">0</td><td class="err-ok">abs &lt; 1e−14</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="panel">
+      <h3>Plane-to-property mapping</h3>
+      <div class="svg-wrap" style="padding:0.8rem 1rem; font-size:0.85rem; line-height:1.55;">
+        <p style="margin:0;"><strong>Two independent Timoshenko planes.</strong></p>
+        <table style="margin-top:0.5rem;">
+          <thead><tr><th>Plane</th><th>Deflection</th><th>Rotation</th><th>Bending</th><th>Shear</th></tr></thead>
+          <tbody>
+            <tr><td>xy</td><td class="num">u<sub>y</sub></td><td class="num">θ<sub>z</sub></td><td class="num">E·I<sub>z</sub></td><td class="num">κ<sub>y</sub>·G·A</td></tr>
+            <tr><td>xz</td><td class="num">u<sub>z</sub></td><td class="num">θ<sub>y</sub></td><td class="num">E·I<sub>y</sub></td><td class="num">κ<sub>z</sub>·G·A</td></tr>
+          </tbody>
+        </table>
+        <p style="margin:0.6rem 0 0.2rem 0;"><strong>Φ definitions (subscript matches κ, not I):</strong></p>
+        <p style="margin:0.2rem 0; font-family:var(--mono);">&nbsp;&nbsp;Φ<sub>y</sub> = 12 EI<sub>z</sub> / (κ<sub>y</sub> GA L²)  &nbsp;→&nbsp; xy plane</p>
+        <p style="margin:0.2rem 0; font-family:var(--mono);">&nbsp;&nbsp;Φ<sub>z</sub> = 12 EI<sub>y</sub> / (κ<sub>z</sub> GA L²)  &nbsp;→&nbsp; xz plane</p>
+        <p style="margin:0.6rem 0 0; color:#9a3412;"><strong>Any swap here is a silent bug.</strong> Both Codex's Batch 5 review and the deep-beam test below pin these mappings.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- TEST 2: TORSION -->
+<!-- ============================================================ -->
+<section class="test-card">
+  <div class="test-header">
+    <div class="left">
+      <h2 class="test-title">Pure torsion</h2>
+      <span class="test-id">test_timo3d_torsion.cpp</span>
+      <span class="badge new">NEW</span>
+    </div>
+    <span class="badge pass">PASS</span>
+  </div>
+  <p class="test-summary">Cantilever along +x with tip torque <code>T<sub>x</sub> = +500 N·m</code>. St. Venant torsion has no shear-strain coupling so the answer matches EB3D exactly: linear θ<sub>x</sub> along the span, root reaction <code>−T<sub>x</sub></code>, all other DOFs zero.</p>
+
+  <div class="test-body">
+    <div class="panel">
+      <h3>Results</h3>
+      <table>
+        <thead><tr><th>Quantity</th><th>Analytical</th><th>FEM</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>θ<sub>x</sub>(L)</td><td class="num">T<sub>x</sub>·L/(G·I<sub>x</sub>) = 2.6042 × 10⁻⁴ rad</td><td class="num">2.6042 × 10⁻⁴</td><td class="err-ok">rel &lt; 1e−9</td></tr>
+          <tr><td>θ<sub>x</sub>(x<sub>k</sub>) along span</td><td class="num">linear</td><td class="num">linear</td><td class="err-ok">per-node rel &lt; 1e−9</td></tr>
+          <tr><td>Root reaction R<sub>θx</sub></td><td class="num">−500 N·m</td><td class="num">−500</td><td class="err-ok">rel &lt; 1e−9</td></tr>
+          <tr><td>u<sub>x</sub>, u<sub>y</sub>, u<sub>z</sub>, θ<sub>y</sub>, θ<sub>z</sub></td><td class="num">0</td><td class="num">0</td><td class="err-ok">abs &lt; 1e−14</td></tr>
+          <tr><td>NR iterations</td><td class="num">1</td><td class="num">1</td><td class="err-ok">exact</td></tr>
+        </tbody>
+      </table>
+
+      <p class="test-summary" style="margin-top:0.6rem;">The torsion block (indices 3, 9) is identical to EB3D — Timoshenko introduces shear flexibility in the bending planes only, not in St. Venant torsion. This test confirms no regression to that inherited behavior.</p>
+    </div>
+
+    <div class="panel">
+      <h3>Why torsion is unchanged from EB3D</h3>
+      <div class="svg-wrap" style="padding:0.8rem 1rem; font-size:0.85rem; line-height:1.55;">
+        <p style="margin:0;">St. Venant uniform torsion describes a beam in which:</p>
+        <ul style="margin:0.3rem 0; padding-left:1.5rem;">
+          <li>cross-sections rotate rigidly about the beam axis,</li>
+          <li>no warping is included (Phase 1 scope),</li>
+          <li>shear strain in the cross-section is uniform after the κ correction is applied at the constitutive level.</li>
+        </ul>
+        <p style="margin:0.4rem 0;">There is no transverse-shear/bending-curvature coupling like Timoshenko's <code>γ = u' − θ</code> in the bending planes. The torsion block <code>K = GI<sub>x</sub>/L · [[1,−1],[−1,1]]</code> is identical between EB3D and Timoshenko 3D.</p>
+        <p style="margin:0.4rem 0; color:#16a34a;"><strong>Verified by passing this test.</strong></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- TEST 3: SLENDER LIMIT -->
+<!-- ============================================================ -->
+<section class="test-card">
+  <div class="test-header">
+    <div class="left">
+      <h2 class="test-title">Slender-beam limit, both planes (L/h = 1000)</h2>
+      <span class="test-id">test_timo3d_slender_limit.cpp</span>
+      <span class="badge new">NEW</span>
+    </div>
+    <span class="badge pass">PASS</span>
+  </div>
+  <p class="test-summary">Symmetric square cross-section (h = b = L/1000) so both bending planes are equally slender. Timoshenko 3D must agree with the direct EB3D solve in <em>both</em> planes simultaneously to relative ~1e-6.</p>
+
+  <div class="test-body">
+    <div class="panel">
+      <h3>Setup &amp; results</h3>
+      <dl class="params">
+        <dt>L, h, b</dt><dd>1.0, 1×10⁻³, 1×10⁻³ m (square cross-section)</dd>
+        <dt>Mesh</dt><dd>40 elements (well refined)</dd>
+        <dt>Load</dt><dd>F<sub>y</sub> = F<sub>z</sub> = −1×10⁻⁶ N at tip (simultaneous, both planes)</dd>
+        <dt>Expected shear fraction per plane</dt><dd>≈ 0.78 × (h/L)² ≈ 7.8 × 10⁻⁷</dd>
+      </dl>
+
+      <table style="margin-top:0.6rem;">
+        <thead><tr><th>Quantity</th><th>Timoshenko 3D</th><th>EB3D</th><th>Rel. diff</th></tr></thead>
+        <tbody>
+          <tr><td>tip u<sub>y</sub></td><td class="num">−2.000002 × 10⁻⁵</td><td class="num">−2.000000 × 10⁻⁵</td><td class="err-ok">7.80 × 10⁻⁷</td></tr>
+          <tr><td>tip u<sub>z</sub></td><td class="num">−2.000002 × 10⁻⁵</td><td class="num">−2.000000 × 10⁻⁵</td><td class="err-ok">7.80 × 10⁻⁷</td></tr>
+          <tr><td>tolerance</td><td colspan="2" class="num">1 × 10⁻⁶</td><td class="err-ok">PASS</td></tr>
+        </tbody>
+      </table>
+
+      <p class="test-summary" style="margin-top:0.6rem;">Both planes converge to EB3D at the same rate (predicted 7.8 × 10⁻⁷ shear contribution; measured 7.80 × 10⁻⁷ — agreement to 3 significant figures). Confirms Timoshenko 3D approaches EB3D correctly in both bending directions.</p>
+    </div>
+
+    <div class="panel">
+      <h3>Why symmetric cross-section matters</h3>
+      <div class="svg-wrap" style="padding:0.8rem 1rem; font-size:0.85rem; line-height:1.55;">
+        <p style="margin:0;"><strong>"Slender" depends on the deflection direction.</strong></p>
+        <p style="margin:0.4rem 0;">For a rectangular section b × h:</p>
+        <p style="margin:0.2rem 0; font-family:var(--mono);">&nbsp;&nbsp;xz bending → "slenderness" = L/h</p>
+        <p style="margin:0.2rem 0; font-family:var(--mono);">&nbsp;&nbsp;xy bending → "slenderness" = L/b</p>
+        <p style="margin:0.4rem 0;">If h ≠ b, the two planes have different effective slendernesses. To test "Timoshenko → EB in both planes" with a single tolerance, the cross-section must be symmetric (h = b) so both planes have L/(side) = 1000.</p>
+        <p style="margin:0.4rem 0; color:#16a34a;"><strong>Used h = b = 0.001 m here.</strong></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- TEST 4: DEEP BEAM (both planes) -->
+<!-- ============================================================ -->
+<section class="test-card">
+  <div class="test-header">
+    <div class="left">
+      <h2 class="test-title">Deep-beam shear ratio in both planes</h2>
+      <span class="test-id">test_timo3d_deep_beam.cpp</span>
+      <span class="badge new">NEW</span>
+      <span class="badge key">KEY</span>
+    </div>
+    <span class="badge pass">PASS</span>
+  </div>
+  <p class="test-summary">Asymmetric rectangular cross-section (h = L/4 along z, b = L/6 along y) so the two bending planes have distinct analytical Timoshenko-to-EB ratios. Confirms both planes' constitutive constants are wired correctly and independently.</p>
+
+  <div class="test-body">
+    <div class="panel">
+      <h3>Setup</h3>
+      <dl class="params">
+        <dt>Section</dt><dd>b × h = (L/6) × (L/4), asymmetric</dd>
+        <dt>I<sub>y</sub>, I<sub>z</sub></dt><dd>b·h³/12, h·b³/12 (different)</dd>
+        <dt>κ<sub>y</sub>, κ<sub>z</sub></dt><dd>5/6 each</dd>
+        <dt>Mesh</dt><dd>10 elements</dd>
+      </dl>
+
+      <h3 style="margin-top:1rem;">Analytical ratios</h3>
+      <div class="formula"><span class="lbl">xz plane:</span> ratio_z = 1 + 3·E·I<sub>y</sub>/(κ<sub>z</sub>·G·A·L²) = 1.048750</div>
+      <div class="formula"><span class="lbl">xy plane:</span> ratio_y = 1 + 3·E·I<sub>z</sub>/(κ<sub>y</sub>·G·A·L²) = 1.021667</div>
+
+      <h3 style="margin-top:1rem;">Results</h3>
+      <table>
+        <thead><tr><th>Plane</th><th>u<sub>EB</sub></th><th>u<sub>Timo</sub></th><th>Ratio</th><th>Analytical</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>xz (F<sub>z</sub>)</td><td class="num">−7.68 × 10⁻⁶</td><td class="num">−8.0544 × 10⁻⁶</td><td class="num">1.048750</td><td class="num">1.048750</td><td class="err-ok">rel &lt; 1e−9</td></tr>
+          <tr><td>xy (F<sub>y</sub>)</td><td class="num">−1.728 × 10⁻⁵</td><td class="num">−1.76544 × 10⁻⁵</td><td class="num">1.021667</td><td class="num">1.021667</td><td class="err-ok">rel &lt; 1e−9</td></tr>
+          <tr><td>Shear contrib.</td><td colspan="2"></td><td class="num">4.65%</td><td class="num">2.12%</td><td class="err-ok">distinct</td></tr>
+          <tr><td>Plane independence check</td><td colspan="4" class="num">ratio_z ≠ ratio_y (different by ~2.7%)</td><td class="err-ok">PASS</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="panel">
+      <h3>Why two distinct ratios pin the constitutive wiring</h3>
+      <div class="svg-wrap" style="padding:0.8rem 1rem; font-size:0.85rem; line-height:1.55;">
+        <p style="margin:0;">With an asymmetric cross-section the two analytical ratios are different (1.04875 vs 1.02167). Any of the following bugs would shift one or both ratios:</p>
+        <ul style="margin:0.3rem 0; padding-left:1.5rem;">
+          <li>swapping I<sub>y</sub> ↔ I<sub>z</sub> in either plane</li>
+          <li>swapping κ<sub>y</sub> ↔ κ<sub>z</sub></li>
+          <li>using a single Φ for both planes instead of independent Φ<sub>y</sub>/Φ<sub>z</sub></li>
+          <li>misassigning Φ<sub>y</sub> to the xz plane (or vice versa)</li>
+        </ul>
+        <p style="margin:0.4rem 0;">Both ratios matching their analytical values to relative 1e−9 means the constitutive constants are correctly paired with their respective planes.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="note">
+    <strong>Why this is a key test for 3D Timoshenko.</strong> In 2D there is only one bending plane, so the constitutive constants have no ambiguity. In 3D the four numbers <code>(I<sub>y</sub>, I<sub>z</sub>, κ<sub>y</sub>, κ<sub>z</sub>)</code> can be mis-paired in subtle ways that would still pass a simple cantilever test if I<sub>y</sub>=I<sub>z</sub> or κ<sub>y</sub>=κ<sub>z</sub>. This test deliberately makes everything distinct.
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- TEST 5: SHEAR LOCKING -->
+<!-- ============================================================ -->
+<section class="test-card">
+  <div class="test-header">
+    <div class="left">
+      <h2 class="test-title">Shear-locking check, both planes (L/h = 1000, 4 elements)</h2>
+      <span class="test-id">test_timo3d_shear_locking.cpp</span>
+      <span class="badge new">NEW</span>
+      <span class="badge key">KEY</span>
+    </div>
+    <span class="badge pass">PASS</span>
+  </div>
+  <p class="test-summary">3D version of the Timo2D locking test. Extremely slender beam (L/h = 1000) on a coarse mesh (only 4 elements), loaded simultaneously with F<sub>y</sub> and F<sub>z</sub>. Both bending planes must remain unlocked.</p>
+
+  <div class="test-body">
+    <div class="panel">
+      <h3>Setup &amp; criterion</h3>
+      <dl class="params">
+        <dt>L/h</dt><dd>1000 (extreme slenderness)</dd>
+        <dt>Mesh</dt><dd>4 elements only (intentionally coarse)</dd>
+        <dt>Loads</dt><dd>F<sub>y</sub> = F<sub>z</sub> = −1×10⁻³ N simultaneously</dd>
+        <dt>Locking signature</dt><dd>FEM/analytical ≪ 1 in either plane</dd>
+      </dl>
+
+      <h3 style="margin-top:1rem;">Results</h3>
+      <table>
+        <thead><tr><th>DOF</th><th>FEM</th><th>Analytical (Timoshenko)</th><th>Rel. error</th></tr></thead>
+        <tbody>
+          <tr><td>u<sub>y</sub>(L)</td><td class="num">−2.000... × 10⁻³</td><td class="num">−2.000... × 10⁻³</td><td class="err-ok">1.69 × 10⁻¹⁵</td></tr>
+          <tr><td>u<sub>z</sub>(L)</td><td class="num">−2.000... × 10⁻³</td><td class="num">−2.000... × 10⁻³</td><td class="err-ok">4.34 × 10⁻¹⁵</td></tr>
+          <tr><td>θ<sub>y</sub>(L)</td><td class="num">checked</td><td class="num">F<sub>z</sub>L²/(2EI<sub>y</sub>)</td><td class="err-ok">rel &lt; 1e−6</td></tr>
+          <tr><td>θ<sub>z</sub>(L)</td><td class="num">checked</td><td class="num">F<sub>y</sub>L²/(2EI<sub>z</sub>)</td><td class="err-ok">rel &lt; 1e−6</td></tr>
+        </tbody>
+      </table>
+
+      <p class="test-summary" style="margin-top:0.6rem;">Both planes match analytical to relative ~1e-15 with only 4 elements — floating-point noise level. Locking-free behavior in both bending planes simultaneously.</p>
+    </div>
+
+    <div class="panel">
+      <h3>Why no 3D locking</h3>
+      <div class="svg-wrap" style="padding:0.8rem 1rem; font-size:0.85rem; line-height:1.55;">
+        <p style="margin:0;">The locking-free property comes from each plane's Φ-corrected shape functions. Since the two planes are uncoupled in the local frame, locking-resistance carries over independently:</p>
+        <ul style="margin:0.3rem 0; padding-left:1.5rem;">
+          <li>xz plane: uses Φ<sub>z</sub>-corrected block with the same closed-form proof as 2D.</li>
+          <li>xy plane: uses Φ<sub>y</sub>-corrected block independently.</li>
+        </ul>
+        <p style="margin:0.4rem 0;">No coupling means a single Φ swap (one plane vs. the other) would still leave both planes locking-free in isolation, but the deep-beam test catches that case via the ratio mismatch.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- TEST 6: TRANSFORM (3 subtests) -->
+<!-- ============================================================ -->
+<section class="test-card">
+  <div class="test-header">
+    <div class="left">
+      <h2 class="test-title">3D coordinate transformation (3 sub-tests)</h2>
+      <span class="test-id">test_timo3d_transform.cpp</span>
+      <span class="badge new">NEW</span>
+    </div>
+    <span class="badge pass">PASS</span>
+  </div>
+  <p class="test-summary">Verifies the rotation-block inheritance from Batch 3 and the directional shear correctness of 3D Timoshenko. Three subtests: rotated-beam local-force round-trip, refVector reorients the bending plane (distinguishes I<sub>y</sub>/κ<sub>z</sub> from I<sub>z</sub>/κ<sub>y</sub>), and a rigid-body patch test on a non-axis-aligned geometry where <code>[λ, S] ≠ 0</code>.</p>
+
+  <div class="test-body" style="grid-template-columns: 1fr;">
+    <div class="panel">
+      <h3>Sub-tests</h3>
+      <div class="subtest-grid">
+        <div class="subtest">
+          <div class="top">
+            <span class="name">A. Local force rotation</span>
+            <span class="badge pass sm">PASS</span>
+          </div>
+          <div class="desc">45-deg beam in xz plane, refVector = (0,1,0). Apply local-z force, transform to global, solve, transform tip back to local using <code>λ</code> for translations and <code>S·λ·S</code> for rotations. Local result equals horizontal-beam reference to rel 1e−9.</div>
+        </div>
+        <div class="subtest">
+          <div class="top">
+            <span class="name">B. refVector reorients plane</span>
+            <span class="badge pass sm">PASS</span>
+          </div>
+          <div class="desc">Beam along +x, tip global F<sub>y</sub> = −1000. With refVector = (0,1,0): xy plane engages (EI<sub>z</sub>, κ<sub>y</sub>) → u<sub>y</sub>(L) = −7.094 × 10⁻⁵. With refVector = (0,0,1): xz plane engages (EI<sub>y</sub>, κ<sub>z</sub>) → u<sub>y</sub>(L) = −2.098 × 10⁻⁴. Both match analytical to rel 1e−9. Distinct because I<sub>y</sub>/κ<sub>z</sub> ≠ I<sub>z</sub>/κ<sub>y</sub>.</div>
+        </div>
+        <div class="subtest">
+          <div class="top">
+            <span class="name">C. Rigid-body patch test</span>
+            <span class="badge pass sm">PASS</span>
+          </div>
+          <div class="desc">xy-plane beam at ~40°, non-trivial refVector, so [λ, S] ≠ 0. Impose u = t + Ω×X with θ = S·Ω. <code>||R||</code> = 1.66 × 10⁻¹⁰ (floating-point noise). Confirms Timoshenko 3D inherits the EB3D rotation transformation correctly; no regression to plain λ.</div>
+        </div>
+        <div class="subtest">
+          <div class="top">
+            <span class="name">refVector swap distinguishes planes</span>
+            <span class="badge pass sm">PASS</span>
+          </div>
+          <div class="desc">With I<sub>z</sub> = 3·I<sub>y</sub> and κ<sub>y</sub> ≠ κ<sub>z</sub>, the two u<sub>y</sub> values from sub-test B differ by a factor of ~3. A coding bug (e.g., swapping Φ<sub>y</sub>/Φ<sub>z</sub> or κ<sub>y</sub>/κ<sub>z</sub>) would produce equal or differently-ratioed values.</div>
+        </div>
+      </div>
+
+      <h3 style="margin-top:1rem;">Sub-test B numerical comparison</h3>
+      <table>
+        <thead><tr><th>refVector</th><th>Active plane</th><th>Governing I</th><th>Governing κ</th><th>u<sub>y</sub>(L)</th></tr></thead>
+        <tbody>
+          <tr><td><code>(0, 1, 0)</code></td><td>local xy</td><td>I<sub>z</sub> = 2.4 × 10⁻⁵</td><td>κ<sub>y</sub> = 5/6</td><td class="num">−7.0944 × 10⁻⁵</td></tr>
+          <tr><td><code>(0, 0, 1)</code></td><td>local xz</td><td>I<sub>y</sub> = 8.0 × 10⁻⁶</td><td>κ<sub>z</sub> = 0.85</td><td class="num">−2.0980 × 10⁻⁴</td></tr>
+          <tr><td colspan="4">Ratio (Iz/Iy ≈ 3, slight κ correction)</td><td class="num">~2.96</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- TEST 7: PHI LIMIT -->
+<!-- ============================================================ -->
+<section class="test-card">
+  <div class="test-header">
+    <div class="left">
+      <h2 class="test-title">Φ<sub>y</sub>, Φ<sub>z</sub> → 0 degeneration to EB3D</h2>
+      <span class="test-id">test_timo3d_phi_limit.cpp</span>
+      <span class="badge new">NEW</span>
+    </div>
+    <span class="badge pass">PASS</span>
+  </div>
+  <p class="test-summary">Choose geometry so both Φ values are below 1×10⁻⁸, then assert every entry of the 12×12 Timoshenko stiffness matches the corresponding EB3D entry. Catches wrong Φ definitions, wrong plane mappings, swapped κ source, and (2±Φ) sign errors — independently in each plane.</p>
+
+  <div class="test-body">
+    <div class="panel">
+      <h3>Setup</h3>
+      <dl class="params">
+        <dt>I<sub>y</sub>, I<sub>z</sub></dt><dd>1×10⁻³, 3×10⁻³ m⁴ (asymmetric)</dd>
+        <dt>κ<sub>y</sub>, κ<sub>z</sub></dt><dd>5/6, 0.9 (asymmetric)</dd>
+        <dt>L</dt><dd>7000 m → Φ<sub>y</sub> ≈ 2.20 × 10⁻⁹, Φ<sub>z</sub> ≈ 6.80 × 10⁻¹⁰</dd>
+      </dl>
+
+      <h3 style="margin-top:1rem;">Checks</h3>
+      <table>
+        <thead><tr><th>Check</th><th>Tol</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>Both Φ values &lt; 1×10⁻⁷</td><td>—</td><td class="err-ok">verified</td></tr>
+          <tr><td>All 144 ke entries vs EB3D</td><td class="num">rel 1 × 10⁻⁷</td><td class="err-ok">PASS</td></tr>
+          <tr><td>xz plane: ke(4,10) follows (2 − Φ<sub>z</sub>)</td><td class="num">rel 1×10⁻¹²</td><td class="err-ok">verified at moderate Φ<sub>z</sub></td></tr>
+          <tr><td>xy plane: ke(5,11) follows (2 − Φ<sub>y</sub>)</td><td class="num">rel 1×10⁻¹²</td><td class="err-ok">verified at moderate Φ<sub>y</sub></td></tr>
+          <tr><td>ke(4,10) &lt; 2·EI<sub>y</sub>/L (Φ &gt; 0)</td><td>—</td><td class="err-ok">strict</td></tr>
+          <tr><td>ke(5,11) &lt; 2·EI<sub>z</sub>/L (Φ &gt; 0)</td><td>—</td><td class="err-ok">strict</td></tr>
+        </tbody>
+      </table>
+
+      <p class="test-summary" style="margin-top:0.6rem;">Two independent moderate-Φ spot checks confirm the (2 − Φ) sign in each plane separately. Asymmetric I<sub>y</sub> ≠ I<sub>z</sub> and κ<sub>y</sub> ≠ κ<sub>z</sub> mean a plane swap would shift the values by different amounts, making the check sensitive to per-plane bugs.</p>
+    </div>
+
+    <div class="panel">
+      <h3>What this catches</h3>
+      <div class="svg-wrap" style="padding:0.8rem 1rem; font-size:0.85rem; line-height:1.55;">
+        <p style="margin:0;">The Φ-limit test is a high-resolution sanity check for the constitutive wiring:</p>
+        <ul style="margin:0.3rem 0; padding-left:1.5rem;">
+          <li>Wrong Φ formula (e.g., 6 instead of 12) → entries off by factor of 2</li>
+          <li>Wrong plane mapping (e.g., Φ<sub>y</sub> uses κ<sub>z</sub>) → entries differ from EB3D limit</li>
+          <li>Sign error on (2 − Φ) → moderate-Φ spot check fails</li>
+          <li>Mixing Φ<sub>y</sub> and Φ<sub>z</sub> → cross-plane entries wrong</li>
+        </ul>
+        <p style="margin:0.4rem 0;">All 144 entries to rel 1e-7 is a strong constraint — any of the above bugs would fail multiple entries by orders of magnitude.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- TEST 8: MASS -->
+<!-- ============================================================ -->
+<section class="test-card">
+  <div class="test-header">
+    <div class="left">
+      <h2 class="test-title">Mass matrix (two rotary inertia deltas)</h2>
+      <span class="test-id">test_timo3d_mass.cpp</span>
+      <span class="badge new">NEW</span>
+    </div>
+    <span class="badge pass">PASS</span>
+  </div>
+  <p class="test-summary">Direct local-mass verification and the <strong>Timoshenko 3D – EB3D mass delta</strong> check: the only difference between Timo3D and EB3D mass must be exactly <em>two</em> rotary-inertia 2×2 blocks: <code>ρ·I<sub>y</sub>·L/6 · [[2,1],[1,2]]</code> on θ<sub>y</sub> (indices 4, 10) and <code>ρ·I<sub>z</sub>·L/6 · [[2,1],[1,2]]</code> on θ<sub>z</sub> (indices 5, 11), zero elsewhere.</p>
+
+  <div class="test-body" style="grid-template-columns: 1fr;">
+    <div class="panel">
+      <h3>Sub-tests</h3>
+      <div class="subtest-grid">
+        <div class="subtest">
+          <div class="top">
+            <span class="name">8.1 Single horizontal element</span>
+            <span class="badge pass sm">PASS</span>
+          </div>
+          <div class="desc">Every nonzero entry of all four local mass blocks (axial, torsion, xy bending Hermite+rotary, xz bending Hermite+rotary) checked against closed form to rel 1e-12. Plus the full 144-entry delta-vs-EB3D check verifying the two rotary 2×2 blocks are the only difference.</div>
+        </div>
+        <div class="subtest">
+          <div class="top">
+            <span class="name">8.2 Generic-orientation</span>
+            <span class="badge pass sm">PASS</span>
+          </div>
+          <div class="desc">Non-axis-aligned beam with non-default refVector. Re-derives <code>M<sub>g</sub> = T<sup>T</sup>M<sub>l</sub>T</code> independently using <code>buildTransformation3D</code> (with S·λ·S adapter) and <code>computeMass</code>, compares entry-by-entry against <code>assembleMass</code>. All 144 entries match to rel 1e-10.</div>
+        </div>
+        <div class="subtest">
+          <div class="top">
+            <span class="name">8.3 Two-element model, fixed root</span>
+            <span class="badge pass sm">PASS</span>
+          </div>
+          <div class="desc">Interior shared node accumulates contributions from both elements: axial diagonal = 4·ρAL/6, torsion diagonal = 4·ρI<sub>x</sub>L/6, both θ diagonals get the full Timoshenko value (Hermite + rotary) doubled.</div>
+        </div>
+        <div class="subtest">
+          <div class="top">
+            <span class="name">Rigid-translation mass sums</span>
+            <span class="badge pass sm">PASS</span>
+          </div>
+          <div class="desc"><code>u<sup>T</sup>Mu</code> equals ρAL for each rigid translation (u<sub>x</sub>, u<sub>y</sub>, u<sub>z</sub>) and ρI<sub>x</sub>L for rigid θ<sub>x</sub> rotation — total mass and polar inertia conserved.</div>
+        </div>
+      </div>
+
+      <h3 style="margin-top:1rem;">Timo3D – EB3D mass delta entries</h3>
+      <table>
+        <thead><tr><th>Entry</th><th>EB3D value</th><th>Timo3D delta</th></tr></thead>
+        <tbody>
+          <tr><td>M(0,0)–M(11,11) axial / Hermite / torsion</td><td colspan="2" class="num">unchanged from EB3D</td></tr>
+          <tr><td>M(4,4), M(10,10)  (θ<sub>y</sub>–θ<sub>y</sub>)</td><td class="num">4L²·ρAL/420</td><td class="num"><strong>+ 2·ρ·I<sub>y</sub>·L/6</strong></td></tr>
+          <tr><td>M(4,10)  (θ<sub>yA</sub>–θ<sub>yB</sub>)</td><td class="num">−3L²·ρAL/420</td><td class="num"><strong>+ ρ·I<sub>y</sub>·L/6</strong></td></tr>
+          <tr><td>M(5,5), M(11,11)  (θ<sub>z</sub>–θ<sub>z</sub>)</td><td class="num">4L²·ρAL/420</td><td class="num"><strong>+ 2·ρ·I<sub>z</sub>·L/6</strong></td></tr>
+          <tr><td>M(5,11)  (θ<sub>zA</sub>–θ<sub>zB</sub>)</td><td class="num">−3L²·ρAL/420</td><td class="num"><strong>+ ρ·I<sub>z</sub>·L/6</strong></td></tr>
+          <tr><td>all other entries</td><td colspan="2" class="num">delta = 0</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="note info">
+    <strong>Mass-matrix strategy for Timoshenko 3D.</strong> Inherits the EB3D consistent mass (axial + Hermite transverse + ρI<sub>x</sub> torsional) and adds exactly two rotary-inertia 2×2 blocks, one per bending plane. Required by PROJECT_SPEC §3.4 for any Timoshenko 3D modal / dynamic analysis (Batches 8/9). Φ-dependent translational corrections (Friedman–Kosmatka closed-form mass) are deliberately deferred — the rotary-inertia delta is the dominant Timoshenko correction for slender-to-moderate beams.
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- Build / run info -->
+<!-- ============================================================ -->
+<section class="test-card" style="background: #f1f5f9;">
+  <h2 class="test-title" style="font-size:1.1rem;">Build &amp; run summary</h2>
+  <div class="test-body">
+    <div class="panel">
+      <h3>Build</h3>
+      <table>
+        <tbody>
+          <tr><td>CMake</td><td class="num">3.16+</td></tr>
+          <tr><td>Compiler</td><td class="num">GCC 15.2.0 (MSYS2 UCRT64)</td></tr>
+          <tr><td>C++ standard</td><td class="num">C++17</td></tr>
+          <tr><td>Eigen</td><td class="num">3.4.0 (header-only)</td></tr>
+          <tr><td>Warnings</td><td class="err-ok">0</td></tr>
+          <tr><td>New source file</td><td>Element/Timoshenko3D.h</td></tr>
+          <tr><td>Modified</td><td>PostProcess/InternalForces.h (extended struct)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="panel">
+      <h3>CTest output (full 29 tests)</h3>
+      <pre style="background:#0f172a; color:#e2e8f0; padding:0.8rem 1rem; border-radius:6px; font-size:0.76rem; line-height:1.4; overflow-x:auto;">Test project C:/_Lucidia/Japhy/BeamLib/build
+ 1/29 Test #1:  test_compile_check ............ Passed
+ 2/29 Test #2:  test_eb2d_cantilever .......... Passed
+ 3/29 Test #3:  test_eb2d_patch ............... Passed
+ 4/29 Test #4:  test_eb2d_moment .............. Passed
+ 5/29 Test #5:  test_eb2d_postprocess ......... Passed
+ 6/29 Test #6:  test_eb2d_simply_supported .... Passed
+ 7/29 Test #7:  test_eb2d_rotated_beam ........ Passed
+ 8/29 Test #8:  test_eb2d_settlement .......... Passed
+ 9/29 Test #9:  test_eb2d_mass ................ Passed
+10/29 Test #10: test_eb3d_cantilever .......... Passed
+11/29 Test #11: test_eb3d_torsion ............. Passed
+12/29 Test #12: test_eb3d_transform ........... Passed
+13/29 Test #13: test_eb2d_eb3d_crosscheck ..... Passed
+14/29 Test #14: test_eb3d_rigid_body .......... Passed
+15/29 Test #15: test_eb3d_mass ................ Passed
+16/29 Test #16: test_timo2d_cantilever ........ Passed
+17/29 Test #17: test_timo2d_deep_beam ......... Passed
+18/29 Test #18: test_timo2d_slender_limit ..... Passed
+19/29 Test #19: test_timo2d_shear_locking ..... Passed
+20/29 Test #20: test_timo2d_phi_limit ......... Passed
+21/29 Test #21: test_timo2d_mass .............. Passed
+22/29 Test #22: test_timo3d_cantilever ........ Passed  &lt;-- new
+23/29 Test #23: test_timo3d_torsion ........... Passed  &lt;-- new
+24/29 Test #24: test_timo3d_slender_limit ..... Passed  &lt;-- new
+25/29 Test #25: test_timo3d_deep_beam ......... Passed  &lt;-- new (key)
+26/29 Test #26: test_timo3d_shear_locking ..... Passed  &lt;-- new (key)
+27/29 Test #27: test_timo3d_transform ......... Passed  &lt;-- new
+28/29 Test #28: test_timo3d_phi_limit ......... Passed  &lt;-- new
+29/29 Test #29: test_timo3d_mass .............. Passed  &lt;-- new
+
+100% tests passed, 0 tests failed out of 29</pre>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <p>Generated alongside the Timoshenko 3D theory PDF at <code>docs/theory/04_timoshenko_3d.pdf</code> and the unified manual at <code>docs/theory/beam_theory_manual.pdf</code> (Chapter 5). All numerical values come from actual runs of the test executables. Codex's Batch 5 review concluded with no findings.</p>
+</footer>
+
+</div>
+</body>
+</html>

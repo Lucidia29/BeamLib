@@ -1,0 +1,329 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{hyperref}
+\usepackage{xcolor}
+
+\title{BeamLib Theory Manual \\ Chapter 4: Timoshenko 3D Beam Element}
+\author{BeamLib Development Team}
+\date{Phase 1, Batch 5}
+
+\newcommand{\dd}{\mathrm{d}}
+\newcommand{\bmath}[1]{\boldsymbol{#1}}
+\newcommand{\Sdiag}{\bmath{S}}
+\newcommand{\lam}{\bmath{\lambda}}
+
+\begin{document}
+\maketitle
+
+\section{Scope and Assumptions}
+
+This chapter derives the 2-node spatial Timoshenko beam element used in BeamLib for shear-deformable 3D members. It extends Timoshenko 2D (Chapter~3) by adding torsion and a second bending/shear plane, and extends EB3D (Chapter~2) by introducing two independent transverse shear strains. It uses the same DOF order, the same local-frame construction, and the same $\Sdiag\lam\Sdiag$ rotation-transformation adapter as EB3D.
+
+\paragraph{Kinematic assumptions.}
+\begin{enumerate}
+    \item Plane sections remain plane after deformation.
+    \item Cross-section normals \emph{do not} remain perpendicular to the deformed beam axis (Timoshenko relaxation; two independent shear strains, one per bending plane).
+    \item Torsion is St.\ Venant uniform torsion: a single rotation DOF $\theta_x$ per node, no warping.
+    \item Displacements and rotations are infinitesimal (linear theory).
+    \item In the local frame the four constitutive modes (axial, torsion, $xy$-plane bending/shear, $xz$-plane bending/shear) are uncoupled. Coupling in the global frame arises only through the coordinate transformation $\bmath{T}$.
+    \item St.\ Venant shear correction factors $\kappa_y$ and $\kappa_z$ remain independent. PROJECT\_SPEC \S8.1 and the Batch~5 prompt make this an explicit constraint.
+\end{enumerate}
+
+\section{Sign and DOF Conventions}\label{sec:signs}
+
+Identical to EB3D (Chapter~2):
+\[
+\bmath{d}_i = (u_{x,i}, u_{y,i}, u_{z,i}, \theta_{x,i}, \theta_{y,i}, \theta_{z,i})^\mathsf{T},
+\qquad
+\bmath{d}^e = (\bmath{d}_A;\,\bmath{d}_B) \in \mathbb{R}^{12}.
+\]
+Indices in this chapter run $0,\dots,11$ to match the C++ implementation.
+
+\paragraph{Structural-convention rotations in the local frame.}
+$\theta_y$ and $\theta_z$ are independent cross-section rotation DOFs (not slaved to slopes). They use the same BeamLib structural sign convention as EB3D:
+\begin{itemize}
+    \item $\theta_y$: rotation about local $+\hat{y}_\ell$ in the structural sense; in the EB limit $\theta_y = \dd u_z/\dd x$. Opposite sign to a right-hand-rule rotation about $+\hat{y}_\ell$.
+    \item $\theta_z$: rotation about local $+\hat{z}_\ell$ in the structural sense; in the EB limit $\theta_z = \dd u_y/\dd x$. Coincides with right-hand-rule rotation about $+\hat{z}_\ell$.
+    \item $\theta_x$: right-hand-rule torsion rotation about $+\hat{x}_\ell$.
+\end{itemize}
+This convention propagates to the global frame through the rotation-block transformation $\Sdiag\lam\Sdiag$ derived in EB3D (Chapter~2 \S"Element-level transformation"); Timoshenko~3D inherits this unchanged.
+
+\section{Strain Components}
+
+Define the four uncoupled local strain measures.
+
+\subsection{Axial strain}
+\[
+\varepsilon_x = \frac{\dd u_x}{\dd x},
+\qquad
+\text{constitutive: } N = EA\,\varepsilon_x.
+\]
+
+\subsection{Torsional strain}
+\[
+\chi = \frac{\dd \theta_x}{\dd x},
+\qquad
+\text{constitutive: } T = G I_x\,\chi.
+\]
+$I_x$ is the polar second moment (\texttt{props.Ix}); this is St.\ Venant uniform torsion, no warping.
+
+\subsection{Bending and shear in the $xy$ plane}
+\[
+\kappa_z = \frac{\dd \theta_z}{\dd x}, \qquad \gamma_{xy} = \frac{\dd u_y}{\dd x} - \theta_z.
+\]
+Constitutive:
+\[
+M_z = E I_z\,\kappa_z, \qquad V_y = \kappa_y\,GA\,\gamma_{xy}.
+\]
+The pairing is fixed: \textbf{$u_y$ deflection $\Leftrightarrow$ $\theta_z$ rotation $\Leftrightarrow$ bending stiffness $E I_z$ $\Leftrightarrow$ shear stiffness $\kappa_y\,GA$}. The shear correction is $\kappa_y$ (the shear correction associated with shear strain in the $u_y$ direction), which is independent of $\kappa_z$ and stored separately as \texttt{props.kappa\_y}.
+
+\subsection{Bending and shear in the $xz$ plane}
+\[
+\kappa_y = \frac{\dd \theta_y}{\dd x}, \qquad \gamma_{xz} = \frac{\dd u_z}{\dd x} - \theta_y.
+\]
+Constitutive:
+\[
+M_y = E I_y\,\kappa_y, \qquad V_z = \kappa_z\,GA\,\gamma_{xz}.
+\]
+The pairing is fixed: \textbf{$u_z$ deflection $\Leftrightarrow$ $\theta_y$ rotation $\Leftrightarrow$ bending stiffness $E I_y$ $\Leftrightarrow$ shear stiffness $\kappa_z\,GA$}. The shear correction is $\kappa_z$, independent of $\kappa_y$, stored as \texttt{props.kappa\_z}.
+
+\paragraph{Plane-to-property mapping summary.}
+\begin{table}[h!]
+\centering
+\begin{tabular}{l l l l l}
+\toprule
+Plane & Deflection & Rotation & Bending $I$ & Shear $\kappa$ \\
+\midrule
+$xy$ & $u_y$ & $\theta_z$ & $I_z$ & $\kappa_y$ \\
+$xz$ & $u_z$ & $\theta_y$ & $I_y$ & $\kappa_z$ \\
+\bottomrule
+\end{tabular}
+\caption{The two independent bending/shear planes of Timoshenko~3D. Swapping any column is a silent bug; PROJECT\_SPEC \S3.1 and Batch~5 review point 1 are explicit about this mapping.}
+\end{table}
+
+\subsection{Strain energy density}
+\[
+U' = \tfrac{1}{2}\,EA\,\varepsilon_x^2
+   + \tfrac{1}{2}\,GI_x\,\chi^2
+   + \tfrac{1}{2}\,E I_z\,\kappa_z^2 + \tfrac{1}{2}\,\kappa_y GA\,\gamma_{xy}^2
+   + \tfrac{1}{2}\,E I_y\,\kappa_y^2 + \tfrac{1}{2}\,\kappa_z GA\,\gamma_{xz}^2,
+\]
+with the four physical modes (axial, torsion, $xy$ bending/shear, $xz$ bending/shear) decoupled in the local frame.
+
+\section{Closed-form Phi-corrected Stiffness}\label{sec:stiffness}
+
+\subsection{Shear-bending ratios}
+
+Define one $\Phi$ per bending plane:
+\[
+\boxed{\;\Phi_y = \dfrac{12\,E I_z}{\kappa_y\,GA\,L^2}, \qquad
+        \Phi_z = \dfrac{12\,E I_y}{\kappa_z\,GA\,L^2}.\;}
+\]
+$\Phi_y$ controls the $xy$ plane (subscript $y$ from $\kappa_y$); $\Phi_z$ controls the $xz$ plane. Both are small for slender / shear-stiff beams (EB regime) and large for deep / shear-soft beams.
+
+\subsection{Plane blocks}
+
+Each bending/shear plane uses the same locking-free closed-form $4\times 4$ Timoshenko block derived in Chapter~3.
+
+\paragraph{$xy$-plane block} on DOFs $(u_{yA}, \theta_{zA}, u_{yB}, \theta_{zB})$ at indices $(1, 5, 7, 11)$:
+\[
+\bmath{K}_b^{xy} \;=\; \dfrac{E I_z}{L^3(1+\Phi_y)}\,
+\begin{bmatrix}
+12     & 6L            & -12    & 6L           \\
+6L     & (4+\Phi_y)L^2 & -6L    & (2-\Phi_y)L^2 \\
+-12    & -6L           & 12     & -6L          \\
+6L     & (2-\Phi_y)L^2 & -6L    & (4+\Phi_y)L^2
+\end{bmatrix}.
+\]
+
+\paragraph{$xz$-plane block} on DOFs $(u_{zA}, \theta_{yA}, u_{zB}, \theta_{yB})$ at indices $(2, 4, 8, 10)$:
+\[
+\bmath{K}_b^{xz} \;=\; \dfrac{E I_y}{L^3(1+\Phi_z)}\,
+\begin{bmatrix}
+12     & 6L            & -12    & 6L           \\
+6L     & (4+\Phi_z)L^2 & -6L    & (2-\Phi_z)L^2 \\
+-12    & -6L           & 12     & -6L          \\
+6L     & (2-\Phi_z)L^2 & -6L    & (4+\Phi_z)L^2
+\end{bmatrix}.
+\]
+
+\subsection{Axial and torsion blocks}
+
+Identical to EB3D (Chapter~2 \S5):
+\begin{align*}
+K_l(0,0) &= K_l(6,6) = \tfrac{EA}{L}, & K_l(0,6) &= K_l(6,0) = -\tfrac{EA}{L}, \\
+K_l(3,3) &= K_l(9,9) = \tfrac{G I_x}{L}, & K_l(3,9) &= K_l(9,3) = -\tfrac{G I_x}{L}.
+\end{align*}
+
+\subsection{EB3D limit}
+
+Both $\Phi_y \to 0$ and $\Phi_z \to 0$ recover the EB3D Hermite blocks exactly: the denominator $L^3(1+\Phi)$ becomes $L^3$, the $\theta\theta$ diagonal entries become $4 EI/L$, and the $\theta_A\theta_B$ off-diagonals become $2 EI/L$. The axial and torsion blocks already coincide with EB3D. Therefore at vanishing $\Phi$ the full 12$\times$12 Timoshenko~3D \texttt{ke} matches EB3D entry-by-entry. \texttt{test\_timo3d\_phi\_limit.cpp} verifies this directly to relative $10^{-7}$.
+
+\section{Local Stiffness $\bmath{k}_l$ Index Map}
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{l l l}
+\toprule
+DOF index & Quantity & Used in block \\
+\midrule
+0 & $u_{xA}$ & axial \\
+1 & $u_{yA}$ & $xy$ bending/shear \\
+2 & $u_{zA}$ & $xz$ bending/shear \\
+3 & $\theta_{xA}$ & torsion \\
+4 & $\theta_{yA}$ & $xz$ bending/shear ($\theta_y \leftrightarrow u_z$) \\
+5 & $\theta_{zA}$ & $xy$ bending/shear ($\theta_z \leftrightarrow u_y$) \\
+6--11 & node-B DOFs & (mirror of 0--5) \\
+\bottomrule
+\end{tabular}
+\caption{12$\times$12 stiffness index map. Note that $\theta_y$ pairs with $u_z$ (xz plane, $E I_y$, $\kappa_z$) and $\theta_z$ pairs with $u_y$ (xy plane, $E I_z$, $\kappa_y$).}
+\end{table}
+
+\section{Consistent Mass Matrix}\label{sec:mass}
+
+The Timoshenko~3D consistent mass has four classes of contributions:
+
+\paragraph{Axial translational mass} on $(0, 6)$, identical to EB3D:
+\[
+\bmath{m}^a = \dfrac{\rho A L}{6}\begin{bmatrix} 2 & 1 \\ 1 & 2 \end{bmatrix}.
+\]
+
+\paragraph{Torsional rotary inertia} on $(3, 9)$, identical to EB3D:
+\[
+\bmath{m}^t = \dfrac{\rho I_x L}{6}\begin{bmatrix} 2 & 1 \\ 1 & 2 \end{bmatrix}.
+\]
+
+\paragraph{$xy$-plane translational Hermite mass} on $(1, 5, 7, 11)$, identical to EB3D's $xy$-plane mass block:
+\[
+\bmath{m}_b^{xy} = \dfrac{\rho A L}{420}
+\begin{bmatrix}
+156 & 22L & 54 & -13L \\
+22L & 4L^2 & 13L & -3L^2 \\
+54  & 13L & 156 & -22L \\
+-13L & -3L^2 & -22L & 4L^2
+\end{bmatrix}.
+\]
+
+\paragraph{$xz$-plane translational Hermite mass} on $(2, 4, 8, 10)$, identical to EB3D's $xz$-plane mass block (same matrix as above).
+
+\paragraph{Bending rotary inertia (Timoshenko-specific).}
+Two additional $2\times 2$ rotary blocks, one per bending plane:
+\begin{itemize}
+    \item $\theta_y$ rotary inertia on indices $(4, 10)$:
+    \[
+    \Delta\bmath{m}_{\theta_y} = \dfrac{\rho I_y L}{6}\begin{bmatrix} 2 & 1 \\ 1 & 2 \end{bmatrix}.
+    \]
+    \item $\theta_z$ rotary inertia on indices $(5, 11)$:
+    \[
+    \Delta\bmath{m}_{\theta_z} = \dfrac{\rho I_z L}{6}\begin{bmatrix} 2 & 1 \\ 1 & 2 \end{bmatrix}.
+    \]
+\end{itemize}
+These are added \emph{on top of} the Hermite translational blocks above (whose $\theta$-$\theta$ entries come from translational kinetic energy through the shape functions, not from rotary inertia). The added entries:
+\begin{align*}
+m_l(4,4)   &\mathrel{+}= 2\,\rho I_y L / 6,
+& m_l(10,10) &\mathrel{+}= 2\,\rho I_y L / 6,
+& m_l(4,10)  &\mathrel{+}= \rho I_y L / 6, \\
+m_l(5,5)   &\mathrel{+}= 2\,\rho I_z L / 6,
+& m_l(11,11) &\mathrel{+}= 2\,\rho I_z L / 6,
+& m_l(5,11)  &\mathrel{+}= \rho I_z L / 6.
+\end{align*}
+
+\paragraph{Timoshenko~3D vs.\ EB3D mass delta.}
+$\bmath{m}_l^{\text{Timo}} - \bmath{m}_l^{\text{EB3D}}$ is exactly the two $2\times 2$ rotary blocks above, zero elsewhere. \texttt{test\_timo3d\_mass.cpp} verifies this delta directly.
+
+\paragraph{What is explicitly excluded.}
+Phi-dependent corrections to the translational Hermite mass (Friedman--Kosmatka closed-form mass) are intentionally not included. For slender to moderately thick beams the dominant correction over EB3D is the bending rotary inertia above; the $\Phi$-dependent translational refinement is a small effect at high $L/h$ regimes that are not in Phase~1's verification scope. PROJECT\_SPEC \S3.4 documents this choice.
+
+\section{Coordinate Transformation}
+
+Inherits the EB3D / Batch~3 convention unchanged. The $12\times 12$ element transformation $\bmath{T}$ is two-flavour block-diagonal:
+\[
+\bmath{T} = \begin{bmatrix}
+\lam & & & \\
+& \Sdiag\lam\Sdiag & & \\
+& & \lam & \\
+& & & \Sdiag\lam\Sdiag
+\end{bmatrix},
+\qquad
+\Sdiag = \mathrm{diag}(1, -1, 1).
+\]
+Translation blocks use the plain orthogonal $\lam$. Rotation blocks use $\Sdiag\lam\Sdiag$, the structural-vs-RH-rule sign adapter derived in the EB3D theory document. \texttt{Timoshenko3D::computeTransformation} delegates to \texttt{BeamMath3D::buildTransformation3D}, the same function EB3D uses; using a different transformation here would silently reintroduce the rigid-body bug that Batch~3 fixed.
+
+The Gram--Schmidt local frame $\lam$ uses \texttt{ElementConn::refVector} with the two-step fallback ladder $(0,0,1) \to (0,1,0)$, as in EB3D.
+
+BeamLib applies $\bmath{T}$ as:
+\[
+\bmath{d}_\ell = \bmath{T}\,\bmath{d}_g, \qquad
+\bmath{r}_g = \bmath{T}^\mathsf{T}\bmath{r}_\ell, \qquad
+\bmath{k}_g = \bmath{T}^\mathsf{T}\bmath{k}_\ell\,\bmath{T}, \qquad
+\bmath{m}_g = \bmath{T}^\mathsf{T}\bmath{m}_\ell\,\bmath{T}.
+\]
+
+\section{Internal Forces (full 3D set)}
+
+\texttt{Timoshenko3D::computeInternalForces} returns the full six-component cross-section forces at both ends:
+\[
+\{N,\, V_y,\, V_z,\, T_x,\, M_y,\, M_z\}.
+\]
+Starting from the local element nodal force vector $\bmath{f}_e = \bmath{k}_l\,\bmath{d}_l \in \mathbb{R}^{12}$, the sign mapping (extends the EB2D rule exactly):
+\begin{align*}
+N_A   &= -f_e[0],   & V_{y,A} &= +f_e[1],   & V_{z,A} &= +f_e[2], \\
+T_{x,A} &= +f_e[3], & M_{y,A} &= +f_e[4],   & M_{z,A} &= +f_e[5], \\
+N_B   &= +f_e[6],   & V_{y,B} &= -f_e[7],   & V_{z,B} &= -f_e[8], \\
+T_{x,B} &= -f_e[9], & M_{y,B} &= -f_e[10],  & M_{z,B} &= -f_e[11].
+\end{align*}
+\textbf{Rule:} at end $A$ the cross-section is just right of node $A$, so $f_e$ entries already give "left material on right material" forces/moments; axial flips because "tension positive" is opposite to "left-on-right axial". At end $B$ the section's left material is the element interior, so every component except axial flips. Same physical reasoning as EB2D (Chapter~1 \S"Internal Forces").
+
+The \texttt{ElementInternalForces} struct was extended in Batch~5 to include $V_y$, $T_x$, $M_z$ fields with default zero, so EB2D / Timoshenko~2D consumers that fill only the $\{N, V_z, M_y\}$ subset continue to work without modification.
+
+\section{Numerical Issues}
+
+\paragraph{3D shear locking.}
+The same locking failure mode as Timoshenko~2D, now possible in either bending plane. The chosen closed-form $\Phi$-corrected formulation is locking-free in each plane independently for the same reason as Timoshenko~2D: the bending/shear block coefficients $(1+\Phi)$ and $(4\pm\Phi)L^2$ come from the exact homogeneous solution of the Timoshenko equations and continuously interpolate the EB Hermite block in the slender limit. \texttt{test\_timo3d\_shear\_locking.cpp} demonstrates this on a coarse-mesh slender beam in both bending planes simultaneously.
+
+\paragraph{Axis mix-ups.}
+3D Timoshenko adds directional shear stiffness, so a swap between $\kappa_y$ and $\kappa_z$ or between $I_y$ and $I_z$ is easy to miss. The \texttt{test\_timo3d\_phi\_limit.cpp} and \texttt{test\_timo3d\_transform.cpp} tests are designed to catch these by deliberately using $I_y \ne I_z$ and $\kappa_y \ne \kappa_z$ wherever the geometry allows them to be tested independently.
+
+\section{Verification Tolerance Table}
+
+\begin{table}[h!]
+\centering
+\small
+\begin{tabular}{l l}
+\toprule
+Check & Tolerance \\
+\midrule
+Cantilever $u_z$, $\theta_y$ under tip $F_z$ ($xz$ plane, 10 elems) & relative $10^{-9}$ \\
+Cantilever $u_y$, $\theta_z$ under tip $F_y$ ($xy$ plane, 10 elems) & relative $10^{-9}$ \\
+Cantilever $\theta_x$ under tip $T_x$                                & relative $10^{-9}$ \\
+Slender limit Timoshenko~3D vs.\ EB3D                                & relative $10^{-6}$ \\
+Deep beam Timo/EB ratio matches analytical                           & relative $10^{-9}$ \\
+Shear-locking coarse mesh ($L/h = 1000$, 4 elems) vs.\ analytical    & relative $10^{-6}$ \\
+$\Phi_y, \Phi_z \to 0$ stiffness entries vs.\ EB3D                   & relative $10^{-7}$ \\
+Transformation round-trip on rotated beam                            & relative $10^{-9}$ \\
+Mass matrix entries (local)                                          & relative $10^{-12}$ \\
+Mass matrix symmetry                                                  & absolute $10^{-12}$ \\
+Rotary inertia delta (Timo--EB3D) at $\theta_y, \theta_z$           & relative $10^{-12}$ \\
+NR iteration count (linear case)                                     & exactly 1 correction step \\
+\bottomrule
+\end{tabular}
+\caption{Verification tolerances for Timoshenko~3D.}
+\end{table}
+
+\section{Implementation Pitfalls (for the Reviewer)}
+
+\begin{enumerate}
+    \item \textbf{Plane-to-property mapping.} \texttt{Iy} pairs with $xz$ bending ($u_z$/$\theta_y$); \texttt{Iz} pairs with $xy$ bending ($u_y$/$\theta_z$). \texttt{kappa\_y} pairs with $xy$ shear; \texttt{kappa\_z} pairs with $xz$ shear. Any swap is a silent bug.
+    \item \textbf{Independent $\kappa_y$, $\kappa_z$.} The code reads both directly from \texttt{props.kappa\_y} and \texttt{props.kappa\_z}, never through \texttt{props.kappa()} (which is the 2D-only convenience accessor returning $\kappa_z$).
+    \item \textbf{$\Phi_y$ vs.\ $\Phi_z$ definitions.} $\Phi_y = 12 EI_z/(\kappa_y GA L^2)$ belongs to the $xy$ plane; $\Phi_z = 12 EI_y/(\kappa_z GA L^2)$ belongs to the $xz$ plane. The subscript matches $\kappa$, not $I$.
+    \item \textbf{Rotation transformation.} Must be $\Sdiag\lam\Sdiag$ on the two rotation 3$\times$3 blocks of $\bmath{T}$, identical to EB3D. Reverting to plain $\lam$ here would silently break multi-element 3D frames whose $\lam$ does not commute with $\Sdiag$.
+    \item \textbf{Mass rotary terms.} $\rho I_y$ adds to $(\theta_y, \theta_y)$ entries (indices 4, 10); $\rho I_z$ adds to $(\theta_z, \theta_z)$ entries (indices 5, 11). Swapping the indices is a silent bug whose effect appears only in modal / dynamic analysis.
+    \item \textbf{Internal force indexing.} 12-component local force vector $\bmath{f}_e = \bmath{k}_l\,\bmath{d}_l$; sign rule documented above. End-B entries flip for every component except axial; the rule is identical to EB2D.
+\end{enumerate}
+
+\end{document}
