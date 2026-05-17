@@ -64,3 +64,23 @@ add_test(NAME test_eb2d_patch COMMAND test_eb2d_patch)
 add_executable(test_eb2d_moment tests/test_eb2d_moment.cpp)
 target_link_libraries(test_eb2d_moment beamlib)
 add_test(NAME test_eb2d_moment COMMAND test_eb2d_moment)
+
+add_executable(test_eb2d_postprocess tests/test_eb2d_postprocess.cpp)
+target_link_libraries(test_eb2d_postprocess beamlib)
+add_test(NAME test_eb2d_postprocess COMMAND test_eb2d_postprocess)
+
+add_executable(test_eb2d_simply_supported tests/test_eb2d_simply_supported.cpp)
+target_link_libraries(test_eb2d_simply_supported beamlib)
+add_test(NAME test_eb2d_simply_supported COMMAND test_eb2d_simply_supported)
+
+add_executable(test_eb2d_rotated_beam tests/test_eb2d_rotated_beam.cpp)
+target_link_libraries(test_eb2d_rotated_beam beamlib)
+add_test(NAME test_eb2d_rotated_beam COMMAND test_eb2d_rotated_beam)
+
+add_executable(test_eb2d_settlement tests/test_eb2d_settlement.cpp)
+target_link_libraries(test_eb2d_settlement beamlib)
+add_test(NAME test_eb2d_settlement COMMAND test_eb2d_settlement)
+
+add_executable(test_eb2d_mass tests/test_eb2d_mass.cpp)
+target_link_libraries(test_eb2d_mass beamlib)
+add_test(NAME test_eb2d_mass COMMAND test_eb2d_mass)

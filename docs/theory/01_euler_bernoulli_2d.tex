@@ -205,7 +205,7 @@ For this linear element the residual (internal force vector) is
 \]
 The Newton residual at the global level is $\bmath{R} = \bmath{R}_{\mathrm{int}} - \bmath{F}_{\mathrm{ext}}$ and the correction equation is $\bmath{K}\,\delta = -\bmath{R}$. With this sign, the convergent state satisfies $\bmath{R}_{\mathrm{int}} = \bmath{F}_{\mathrm{ext}}$.
 
-\section{Consistent Mass Matrix}
+\section{Consistent Mass Matrix}\label{sec:mass-local}
 
 The consistent mass matrix for EB2D uses the same shape functions:
 \[
@@ -289,8 +289,78 @@ For each element with connectivity $(A, B)$:
     \item $\bmath{d}_l^e = \bmath{T}\,\bmath{d}_g^e$.
     \item Pass $\bmath{x}_A^{loc} = (0,0,0)$, $\bmath{x}_B^{loc} = (L,0,0)$, $\bmath{d}_l^e$ to \texttt{EulerBernoulli2D::computeElement} to obtain $\bmath{r}_l^e$ and $\bmath{k}_l^e$.
     \item $\bmath{r}_g^e = \bmath{T}^\mathsf{T}\bmath{r}_l^e$, $\bmath{k}_g^e = \bmath{T}^\mathsf{T}\bmath{k}_l^e\bmath{T}$.
-    \item Scatter $\bmath{r}_g^e$, $\bmath{k}_g^e$ into the free-DOF system using the DofMap. Entries with any fixed DOF on either side are dropped (Batch 2A only supports homogeneous Dirichlet constraints; PROJECT\_SPEC \S 11).
+    \item Scatter $\bmath{r}_g^e$, $\bmath{k}_g^e$ into the free-DOF system using the DofMap. Entries with any fixed DOF on either side are dropped from the free-DOF system (only their RHS contribution remains, see \S\ref{sec:prescribed}).
 \end{enumerate}
+
+\section{Prescribed Displacement (Elimination + RHS Correction)}\label{sec:prescribed}
+
+For a fixed DOF whose prescribed value is not zero (the Batch 2B settlement case), the BeamLib implementation uses the elimination plus right-hand-side correction. Partitioning the global system into free ($f$) and restrained ($r$) DOFs gives
+\[
+\begin{bmatrix} \bmath{K}_{ff} & \bmath{K}_{fr} \\ \bmath{K}_{rf} & \bmath{K}_{rr} \end{bmatrix}
+\begin{bmatrix} \bmath{u}_f \\ \bmath{u}_r \end{bmatrix}
+=
+\begin{bmatrix} \bmath{F}_f^{\mathrm{ext}} \\ \bmath{F}_r^{\mathrm{ext}} + \bmath{R}_r^{\mathrm{reaction}} \end{bmatrix},
+\]
+where $\bmath{u}_r$ is given. The free-DOF equation is
+\[
+\bmath{K}_{ff}\,\bmath{u}_f = \bmath{F}_f^{\mathrm{ext}} - \bmath{K}_{fr}\,\bmath{u}_r.
+\]
+The Phase 1 implementation does \emph{not} explicitly form $\bmath{K}_{fr}$. Instead, the element-local displacement vector $\bmath{d}_l^e = \bmath{T}\bmath{d}_g^e$ is collected with each fixed DOF carrying its prescribed value (\texttt{Node::prescribed}), so the element internal force $\bmath{r}_l^e = \bmath{k}_l^e\bmath{d}_l^e$ already contains the $\bmath{K}_{fr}\bmath{u}_r$ contribution. After mapping back to global and scattering only the free-DOF rows, the residual at a free DOF reads
+\[
+R_i^{\mathrm{int}} = \sum_{e \ni i} (\bmath{T}^\mathsf{T}\bmath{k}_l^e\bmath{T}\bmath{d}_g^e)_i
+                   = \bigl(\bmath{K}_{ff}\bmath{u}_f + \bmath{K}_{fr}\bmath{u}_r\bigr)_i,
+\]
+and the Newton residual $\bmath{R} = \bmath{R}^{\mathrm{int}} - \bmath{F}^{\mathrm{ext}}$ feeds the correction equation $\bmath{K}_{ff}\delta = -\bmath{R}$, which is exactly the elimination form above. No additional bookkeeping for $\bmath{K}_{fr}$ is required because the contribution is computed implicitly through $\bmath{k}_l^e\bmath{d}_l^e$.
+
+This route assumes one initialization step: any fixed DOF must have \texttt{node.dof[d] = node.prescribed[d]} so that \texttt{scatterFreeDofs} (which only updates free entries) does not contradict the prescribed value. The implementation reads $\bmath{d}_g^e$ via \texttt{Node::totalDof}, which returns \texttt{prescribed[d]} when fixed and \texttt{dof[d]} otherwise; this removes the initialization requirement entirely.
+
+\section{Reaction Recovery}\label{sec:reactions}
+
+BeamLib uses full-system reassembly to recover reactions. The implementation reassembles the element residual into a global-DOF-sized vector (size $N_{\text{nodes}} \cdot n_{\text{DPN}}$, no row/column elimination), then defines
+\[
+R_d^{\mathrm{reaction}} = R_d^{\mathrm{int,full}} - F_d^{\mathrm{ext}}
+\quad\text{for every fixed DOF } d.
+\]
+The $F_d^{\mathrm{ext}}$ term ensures correctness when an external load is applied at a constrained DOF (e.g.\ a downward concentrated load at a fixed support node): the reaction must absorb both the internal force and the externally applied component. Using $R^{\mathrm{int}}$ alone is incorrect when constrained DOFs carry external loads (Codex Round~3 finding~1). Free-DOF entries of the returned reaction vector are left at zero.
+
+\paragraph{Sign of the recovered reaction.}
+The returned reaction is the FE residual at the constrained DOF along the positive DOF direction. For the EB2D structural-convention $\theta_y = \dd w/\dd x$, the relationship to the local internal forces at the support cross section is
+\[
+R_z^{\mathrm{reaction}} = V_{\mathrm{internal}}^{(\text{left-on-right})}(\text{section}),
+\qquad
+M_y^{\mathrm{reaction}} = -M_{\mathrm{internal}}^{(=EI w'')}(\text{section}).
+\]
+The minus sign on $M_y$ comes from the difference between the right-hand-rule moment about $+\hat{y}$ (used in the $\bmath{r}\times\bmath{F}$ static-equilibrium computation) and the BeamLib structural moment work-conjugate to $\theta_y = \dd w/\dd x$ (\S\ref{sec:thetay-justification}); they differ by a sign. The cantilever cross-check used by \texttt{test\_eb2d\_postprocess.cpp} confirms this: with $F_z = -1000$ at the tip, $M_{\mathrm{internal}}(0) = EI w''(0) = -1000$, so the recovered reaction is $M_y^{\mathrm{reaction}} = +1000$.
+
+\section{Internal Forces (End Values)}\label{sec:internal-forces}
+
+Each element exposes a static method \texttt{computeInternalForces} that returns the cross-section forces $N$, $V_z$, $M_y$ at both ends. The starting point is the local element nodal force vector
+\[
+\bmath{f}_e = \bmath{k}_l\,\bmath{d}_l \in \mathbb{R}^6,
+\]
+which is the force the two nodes apply to the element (equivalently, the FE residual contribution from this element evaluated at the local end DOFs). The conversion to ``beam diagram'' cross-section forces is
+\[
+\boxed{\;\begin{aligned}
+N_A &= -f_e[0], & V_{z,A} &= +f_e[1], & M_{y,A} &= +f_e[2], \\
+N_B &= +f_e[3], & V_{z,B} &= -f_e[4], & M_{y,B} &= -f_e[5].
+\end{aligned}\;}
+\]
+The sign rule: at end $A$, the section is just to the \emph{right} of node $A$ (element interior on the right), so $f_e$ entries at end $A$ already give the ``left material on right material'' force. At end $B$, the section is just to the \emph{left} of node $B$ (element interior on the left), so $f_e$ entries at end $B$ give the opposite (``right material on left material''); the negation restores the cross-section ``left on right'' convention so that $V_z$ and $M_y$ at the two ends of an element share the same sign for constant-shear / linearly-varying-moment loadings. For axial force, the BeamLib convention is ``tension positive,'' which is the negative of the ``left-on-right'' axial component; this introduces the opposite-of-shear sign pattern (flip at $A$, no flip at $B$).
+
+\paragraph{Cantilever cross-check (used in \texttt{test\_eb2d\_postprocess.cpp}).}
+A horizontal cantilever fixed at $x=0$ with tip load $F_z = -1000$ at $x=L$ has, by statics,
+\[
+V_z(x) = +1000, \qquad M_y(x) = +1000\,(L - x), \qquad N(x) = 0.
+\]
+Therefore $V_{z,A} = V_{z,B} = +1000$ for every element; $M_{y,A}$ of the root element equals $+1000$ and $M_{y,B}$ of the tip element equals $0$. These values match the Codex prompt's acceptance criteria and verify the sign of every term in the table above.
+
+\section{Mass Matrix Assembly}\label{sec:mass-assembly}
+
+The global consistent mass matrix follows the same per-element transformation as the stiffness:
+\[
+\bmath{M}_g^e = \bmath{T}^\mathsf{T}\,\bmath{M}_l^e\,\bmath{T},
+\]
+with $\bmath{M}_l^e$ from \S\ref{sec:mass-local}. Scatter into the free-DOF system uses the same DofMap as the stiffness assembly; mass entries that fall on a fixed DOF are dropped. This is appropriate for modal analysis with free-DOF generalized eigenvalue problems (Batch~9).
 
 \section{Formula-to-C++ Index Mapping}
 
@@ -372,6 +442,12 @@ Patch test constant-strain residual & absolute $10^{-10}$ \\
 Cantilever tip $u_z$, $\theta_y$ (10 elements) & relative $10^{-9}$ \\
 Pure end-moment $u_z$, $\theta_y$ (10 elements) & relative $10^{-9}$ \\
 Constant-moment uniformity along span & relative $10^{-9}$ \\
+Cantilever reactions, element internal forces (post-process) & relative $10^{-9}$ \\
+Simply supported beam midspan deflection (20 elements) & relative $10^{-8}$ \\
+Simply supported beam reactions $qL/2$ & relative $10^{-9}$ \\
+Rotated beam local displacement vs.\ horizontal reference & relative $10^{-9}$ \\
+Settlement: deflection field, reactions (10 elements) & relative $10^{-9}$ \\
+Reaction at unloaded free DOF (absolute) & $10^{-9}$ \\
 Newton iteration count (linear case) & exactly 1 correction step \\
 Final NR residual (linear case) & $\leq 10^{-7}$ absolute (set by NRConfig.tol) \\
 \bottomrule

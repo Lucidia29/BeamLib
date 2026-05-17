@@ -2,6 +2,7 @@
 #include "ElementBase.h"
 #include "../Core/SectionProperties.h"
 #include "../Math/Rotation2D.h"
+#include "../PostProcess/InternalForces.h"
 
 namespace beamlib {
 
@@ -47,6 +48,35 @@ struct EulerBernoulli2D {
         const Vec3& /*refVector*/)
     {
         return Rotation2D::compute(xA, xB);
+    }
+
+    // Raw end internal forces in the cross-section ("beam diagram") convention.
+    // dispVec must be the element's LOCAL nodal displacement vector
+    // [u_xA, u_zA, theta_yA, u_xB, u_zB, theta_yB]; assembly layer is responsible
+    // for the global -> local transformation when hasTransformation == true.
+    //
+    // Sign convention (see docs/theory/01_euler_bernoulli_2d.tex):
+    //   N_A   = -f_e[0],   V_z_A = +f_e[1],   M_y_A = +f_e[2]
+    //   N_B   = +f_e[3],   V_z_B = -f_e[4],   M_y_B = -f_e[5]
+    // where f_e = K_l * dispVec is the element's local nodal force vector.
+    // The "B-end" flips because at end B the section's left side is the
+    // element interior, so f_e (force on element from node) carries the
+    // opposite-of-cross-section sign. For axial, "tension positive" is the
+    // opposite of the left-on-right axial component, hence the extra flip at A.
+    static ElementInternalForces computeInternalForces(
+        const Vec3& xA, const Vec3& xB,
+        const VecN<6>& dispVec,
+        const SectionProperties& props)
+    {
+        ElementResult<3> r = computeElement(xA, xB, dispVec, props);
+        ElementInternalForces f;
+        f.N_A   = -r.re[0];
+        f.V_z_A = +r.re[1];
+        f.M_y_A = +r.re[2];
+        f.N_B   = +r.re[3];
+        f.V_z_B = -r.re[4];
+        f.M_y_B = -r.re[5];
+        return f;
     }
 
     static ElementMassResult<3> computeMass(

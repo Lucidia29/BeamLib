@@ -414,3 +414,52 @@ None for Batch 2A.
 ### Recommendation
 
 Merge `feat/batch-2a-eb2d-core` after the branch is committed and pushed. Batch 2B can proceed after merge.
+
+## Codex Review - Batch 2B
+
+### Status
+
+Batch 2B is numerically coherent except for one coverage gap: the new `BeamModel::assembleMass()` path is implemented but is not exercised by any test. Do not merge Batch 2B until a small mass-assembly test is added.
+
+### Verified
+
+- Nonzero prescribed displacement is implemented by collecting fixed DOFs through `Node::totalDof()`, so the free residual naturally contains the `K_fr u_r` RHS-correction term. This is consistent with elimination and does not disturb homogeneous Batch 2A tests because `Node::prescribed` defaults to zero.
+- Reaction recovery uses full residual reassembly and returns `R_int - F_ext` at fixed DOFs. This correctly handles loads applied directly to constrained DOFs; the simply supported uniform-load test exercises this through support-node equivalent nodal loads.
+- The support moment sign convention in the theory note is acceptable. With BeamLib's accepted structural convention `theta_y = dw/dx`, the recovered constrained rotational residual is the right support reaction quantity. The documented distinction from `EI w''` is necessary and should not be changed without changing the Batch 2A rotation convention.
+- EB2D endpoint internal forces follow the documented nodal-force-to-cross-section mapping and pass the cantilever shear/moment checks.
+- Rotated-beam tests cover both a local transverse force transformed to global coordinates and a global vertical force decomposed into local axial/transverse components.
+- Settlement test covers nonzero prescribed displacement, RHS correction, and constrained-DOF reaction recovery.
+- Local verification passed: `cmake --build build`; `ctest --test-dir build --output-on-failure` passed 8/8 tests.
+
+### Remaining Issues
+
+1. `assembleMass()` is not covered by CTest.
+
+   `BeamModel::assembleMass()` was added in Batch 2B, but no test calls it. Existing tests validate static assembly, reactions, internal forces, rotations, and prescribed displacement; they do not instantiate the mass assembly path. Add a small EB2D mass test that builds a one- or two-element model, calls `assembleMass(M)`, and checks at least matrix size, symmetry, nonzero entries, and one or two known transformed/untransformed entries. This is important because Batch 8/9 will depend on this path.
+
+### Recommendation
+
+Add the mass-assembly smoke/numerical test, rerun CTest, then re-submit Batch 2B for final review. No change is recommended to the reaction moment sign unless the project reopens the already accepted `theta_y = dw/dx` convention.
+
+## Codex Final Re-review - Batch 2B
+
+### Status
+
+Batch 2B is merge-ready from the numerical-methods review perspective.
+
+### Verified
+
+- The previous blocker is resolved. `tests/test_eb2d_mass.cpp` now exercises `BeamModel::assembleMass()`.
+- The mass test checks the direct horizontal-element EB2D consistent mass entries, including axial entries, bending translational entries, bending-rotation coupling signs, rotational diagonal entries, and rigid axial translation mass.
+- The mass test also checks a vertical element, confirming `T^T M_l T` maps local axial mass to global `u_z` and local bending mass to global `u_x`.
+- The two-element fixed-root subtest confirms free-DOF reduction and shared-node mass accumulation.
+- `CMakeLists.txt` registers `test_eb2d_mass`.
+- Local verification passed: `cmake --build build`; `ctest --test-dir build --output-on-failure` passed 9/9 tests.
+
+### Remaining Issues
+
+None for Batch 2B.
+
+### Recommendation
+
+Merge Batch 2B after the branch is committed and pushed. The reaction moment sign should remain as implemented/documented under the accepted BeamLib convention `theta_y = dw/dx`.
