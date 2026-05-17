@@ -75,21 +75,56 @@ inline LocalFrame3D buildLocalFrame3D(const Vec3& xA, const Vec3& xB,
 }
 
 // 12x12 element transformation matrix for a 3D beam with DOF order
-// [u_x, u_y, u_z, theta_x, theta_y, theta_z] at node A then at node B.
-// T = block-diag(lambda, lambda, lambda, lambda), so each 3-vector DOF group
-// (uA, thetaA, uB, thetaB) transforms with the same 3x3 lambda. Both
-// translations and small rotations are treated as 3-component vectors here;
-// this is exact for the translations and consistent for linear EB/Timoshenko
-// rotation DOFs (the conventions for theta_y/theta_z in the local frame match
-// EB2D's structural convention, see docs/theory/02_euler_bernoulli_3d.tex).
+// [u_x, u_y, u_z, theta_x, theta_y, theta_z] at each node.
+//
+// The translation 3x3 blocks at (0,0) and (6,6) use the plain orthogonal
+// lambda from buildLocalFrame3D: translations transform as a standard
+// 3-vector (v_local = lambda * v_global).
+//
+// The rotation 3x3 blocks at (3,3) and (9,9) use S * lambda * S, where
+// S = diag(1, -1, 1). This is the "structural-convention" adapter:
+//
+//   BeamLib stores rotation DOFs in the convention
+//       theta_x = +Omega_x   (RH about local +x)
+//       theta_y = -Omega_y   (structural; equals du_z/dx, opposite of RH
+//                             about +y -- inherited from EB2D Chapter 1)
+//       theta_z = +Omega_z   (matches RH about +z because theta_z = du_y/dx)
+//   for the RH-rule physical rotation pseudovector Omega. Equivalently,
+//   theta = S * Omega in any orthonormal frame.
+//
+//   For a physical rotation Omega_local = lambda * Omega_global. Therefore
+//       theta_local = S * Omega_local
+//                   = S * lambda * Omega_global
+//                   = S * lambda * S * (S * Omega_global)
+//                   = (S * lambda * S) * theta_global.
+//
+//   So the correct global->local transformation for BeamLib's stored
+//   rotation DOFs is S * lambda * S, not lambda. The plain lambda block is
+//   correct only when lambda commutes with S (e.g., beams in the xz plane);
+//   for beams whose lambda mixes the y-axis with another axis the difference
+//   is the commutator [lambda, S] != 0, and a rigid-body patch test fails
+//   (see tests/test_eb3d_rigid_body.cpp).
+//
+// This adapter is specific to BeamLib's EB / Timoshenko mixed sign
+// convention. A future element that uses pure RH-rule pseudovector rotations
+// (e.g., GE3D with explicit Rodrigues parameterization) should build its
+// own transformation rather than reuse this function.
 inline MatMN<12, 12> buildTransformation3D(const Vec3& xA, const Vec3& xB,
                                            const Vec3& refVector)
 {
     const LocalFrame3D f = buildLocalFrame3D(xA, xB, refVector);
+
+    // Rotation block: lambda_rot(i,j) = s(i) * lambda(i,j) * s(j) with
+    // s = (1, -1, 1). Equivalent to S * lambda * S.
+    Mat3 lambda_rot = f.lambda;
+    lambda_rot.row(1) *= -1.0;
+    lambda_rot.col(1) *= -1.0;
+
     MatMN<12, 12> T = MatMN<12, 12>::Zero();
-    for (int blk = 0; blk < 4; ++blk) {
-        T.block<3, 3>(blk * 3, blk * 3) = f.lambda;
-    }
+    T.block<3, 3>(0, 0) = f.lambda;     // node A translations
+    T.block<3, 3>(3, 3) = lambda_rot;   // node A rotations
+    T.block<3, 3>(6, 6) = f.lambda;     // node B translations
+    T.block<3, 3>(9, 9) = lambda_rot;   // node B rotations
     return T;
 }
 

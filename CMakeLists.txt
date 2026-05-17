@@ -101,3 +101,11 @@ add_test(NAME test_eb3d_transform COMMAND test_eb3d_transform)
 add_executable(test_eb2d_eb3d_crosscheck tests/test_eb2d_eb3d_crosscheck.cpp)
 target_link_libraries(test_eb2d_eb3d_crosscheck beamlib)
 add_test(NAME test_eb2d_eb3d_crosscheck COMMAND test_eb2d_eb3d_crosscheck)
+
+add_executable(test_eb3d_rigid_body tests/test_eb3d_rigid_body.cpp)
+target_link_libraries(test_eb3d_rigid_body beamlib)
+add_test(NAME test_eb3d_rigid_body COMMAND test_eb3d_rigid_body)
+
+add_executable(test_eb3d_mass tests/test_eb3d_mass.cpp)
+target_link_libraries(test_eb3d_mass beamlib)
+add_test(NAME test_eb3d_mass COMMAND test_eb3d_mass)

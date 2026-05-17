@@ -113,11 +113,19 @@ int subtest_local_force_rotation()
 
     VecN<6> rotTip = solveSingleElement(xA, xB, ref, loadRot, sec);
 
-    // Convert rotated tip global displacement back to local.
+    // Convert rotated tip global displacement back to local. Translations use
+    // plain lambda. Rotations use the structural-convention adapter
+    // S * lambda * S (S = diag(1, -1, 1)); see BeamMath3D::buildTransformation3D
+    // for the derivation. For this 45-deg-in-xz-plane case, lambda happens to
+    // commute with S so the two forms coincide; using the adapter explicitly
+    // keeps the test correct under any geometry change.
     Vec3 uG(rotTip[0], rotTip[1], rotTip[2]);
     Vec3 tG(rotTip[3], rotTip[4], rotTip[5]);
+    Mat3 lambda_rot = lambda;
+    lambda_rot.row(1) *= -1.0;
+    lambda_rot.col(1) *= -1.0;
     Vec3 uL = lambda * uG;
-    Vec3 tL = lambda * tG;
+    Vec3 tL = lambda_rot * tG;
 
     // Compare with reference (which IS in local frame because lambda = I).
     if (check_rel(uL[0], refTip[0], 1e-9, "local u_x")) return 1;

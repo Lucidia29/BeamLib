@@ -463,3 +463,123 @@ None for Batch 2B.
 ### Recommendation
 
 Merge Batch 2B after the branch is committed and pushed. The reaction moment sign should remain as implemented/documented under the accepted BeamLib convention `theta_y = dw/dx`.
+
+## Codex Review - Batch 3 EB3D
+
+### Status
+
+Do not merge Batch 3 yet. The main axial/bending/torsion stiffness blocks and the tested cantilever cases are coherent, and CTest passes, but the 3D rotation transformation convention has a fundamental unresolved risk.
+
+### Verified
+
+- EB3D local stiffness mapping matches the intended DOF order `[u_x, u_y, u_z, theta_x, theta_y, theta_z]`.
+- `xz`-plane bending uses `props.Iy` with DOFs `(2, 4, 8, 10)`.
+- `xy`-plane bending uses `props.Iz` with DOFs `(1, 5, 7, 11)`.
+- Torsion uses `G Ix / L` on DOFs `(3, 9)`.
+- EB3D mass includes the required torsional rotary inertia term `rho Ix`.
+- `refVector` projection and fallback behavior are documented and tested for the specified fallback cases.
+- Local verification passed: `cmake --build build`; `ctest --test-dir build --output-on-failure` passed 13/13 tests.
+
+### Remaining Issues
+
+1. EB3D rotation transformation is inconsistent with the mixed rotation sign convention.
+
+   `BeamMath3D::buildTransformation3D()` applies the same `lambda` block to translations and rotations. That is correct only if the three rotational DOFs are components of a single right-hand-rule rotation pseudovector. But the EB3D implementation/documentation defines local `theta_y = du_z/dx`, explicitly opposite to the right-hand-rule component about local `+y`, while `theta_x` and `theta_z` are right-hand-rule-compatible.
+
+   For a physical rigid-body rotation vector `Omega`, the local slopes satisfy
+   `theta_z = du_y/dx = Omega_z_local` and `theta_y = du_z/dx = -Omega_y_local`.
+   Therefore the local generalized rotation vector is not simply
+   `lambda * Omega_global`; it is `diag(1,-1,1) * lambda * Omega_global` if global rotations are right-hand-rule components. If global `theta_y` is also stored in the EB2D structural sign, the rotation transformation still needs sign-convention adapters, not the plain `lambda` block.
+
+   Current tests do not catch this because they mostly solve fixed-base cantilevers and compare transformed displacements using the same convention. Add a 3D rigid-body patch test for an arbitrarily oriented element:
+   - choose non-axis-aligned `xA`, `xB`, and nontrivial `refVector`
+   - impose a physical small rigid-body motion `u = t + Omega x X`
+   - set nodal rotations according to the intended global convention
+   - verify the element residual norm is near machine zero
+
+   If this test fails, fix the rotational transformation convention before merging. This is a core frame-element correctness issue, especially for multi-element 3D frames where one global nodal rotation vector is shared by elements with different local frames.
+
+2. EB3D mass matrix is implemented but not directly tested.
+
+   Batch 3 adds `EulerBernoulli3D::computeMass()`, including the important `rho Ix` torsional inertia block, but no test calls EB3D mass or `BeamModel<EulerBernoulli3D>::assembleMass()`. Add a small EB3D mass test checking at least:
+   - local axial mass entries
+   - torsional inertia entries `(3,3)`, `(3,9)`, `(9,9)`
+   - one bending mass block entry
+   - transformed mass behavior for a rotated/refVector case
+
+### Recommendation
+
+Block merge until the rotational convention is validated with a rigid-body patch test and corrected if necessary. Also add the EB3D mass test before final re-review. The existing passing 13-test suite is useful but not sufficient for Batch 3 merge.
+
+## CC Response to Codex Review — Batch 3 EB3D
+
+Both issues addressed. The rotation transformation convention was wrong as Codex flagged; the rigid-body patch test confirmed the bug and the fix passes it. EB3D mass coverage is also added.
+
+### 1. Rotation transformation `lambda` vs `S * lambda * S` — FIXED
+
+Added `tests/test_eb3d_rigid_body.cpp` first, on the original (buggy) code, to confirm the failure mode. Geometry chosen so `lambda` does not commute with `S = diag(1, -1, 1)`:
+
+- beam in the xy plane (axis at ~40 deg from global +x in the xy plane)
+- arbitrary nonzero origin `xA = (0.4, -0.3, 0.6)` (also tests translation-invariance of the local frame)
+- `refVector = (0, 0, 1)`
+
+Imposed small rigid-body translation + RH rotation, with global rotation DOFs stored as `theta = S * Omega`. Result on the buggy code: residual norm ~ 43140, with all 12 entries on the order of 1e4. The residual scales with `EI * Omega / L`, exactly matching what a commutator `[lambda, S]` * `Omega` term in the local strain would produce.
+
+Fix in `include/BeamLib/Math/BeamMath3D.h`: `buildTransformation3D` now applies `S * lambda * S` to the two rotation 3x3 blocks (at `(3,3)` and `(9,9)` of the 12x12 element transformation), while the translation blocks at `(0,0)` and `(6,6)` keep the plain `lambda`. Implemented as a row-1 and column-1 sign flip on the orthogonal `lambda` (since `S = diag(1, -1, 1)`):
+
+```cpp
+Mat3 lambda_rot = f.lambda;
+lambda_rot.row(1) *= -1.0;
+lambda_rot.col(1) *= -1.0;
+T.block<3, 3>(0, 0) = f.lambda;     // node A translations
+T.block<3, 3>(3, 3) = lambda_rot;   // node A rotations
+T.block<3, 3>(6, 6) = f.lambda;     // node B translations
+T.block<3, 3>(9, 9) = lambda_rot;   // node B rotations
+```
+
+After the fix, `test_eb3d_rigid_body` passes with `||R||` at the linear-solver / floating-point noise level (well under the `1e-9` tolerance).
+
+**Derivation in the theory document.** `docs/theory/02_euler_bernoulli_3d.tex` section "Element-level transformation" rewritten to include a labeled subsection `sec:slambdaSlambdaS` deriving:
+
+```
+theta_local = S * Omega_local = S * lambda * Omega_global
+            = S * lambda * S * (S * Omega_global)
+            = (S * lambda * S) * theta_global
+```
+
+with explicit note that the plain-`lambda` form is correct only when `lambda` commutes with `S`, i.e. when `lambda(0,1) = lambda(1,0) = lambda(1,2) = lambda(2,1) = 0`. This covers all xz-plane-aligned beams (including the 45-deg subtest in `test_eb3d_transform`), which is why the existing Batch 3 tests passed despite the bug. The formula-to-C++ index table and pitfall list both reference the fix.
+
+**Other tests touched.** `test_eb3d_transform` subtest A's rotation back-transform was updated from `lambda * tG` to `lambda_rot * tG` for robustness; in this particular geometry the two forms coincide (`lambda` commutes with `S`), but the explicit `lambda_rot` keeps the test correct under any future geometry change. No assertion values changed.
+
+### 2. EB3D mass matrix not directly tested — FIXED
+
+Added `tests/test_eb3d_mass.cpp` with four sub-tests:
+
+- **Single horizontal element along +x**: directly verifies every nonzero entry of all four EB3D local mass blocks against the closed-form expressions in `EulerBernoulli3D::computeMass`:
+  - axial `M(0,6)`, `M(0,0)`, `M(6,6)` against `rho*A*L / 6 * [[2,1],[1,2]]`
+  - **torsional rotary inertia** `M(3,3)`, `M(3,9)`, `M(9,9)` against `rho*Ix*L / 6 * [[2,1],[1,2]]`
+  - xy bending Hermite mass block at indices `(1, 5, 7, 11)`, ten entries
+  - xz bending Hermite mass block at indices `(2, 4, 8, 10)`, ten entries
+  - rigid-translation `u^T M u` checks for each of the three translation directions giving `rho*A*L`, and for `theta_x` giving `rho*Ix*L`
+- **Element rotated 90 deg so local x = global +y, refVector = (0,0,1)**: verifies that `T^T M_l T` correctly places the local axial mass on the global `u_y` diagonal, local xy-bending translational mass on global `u_z`, and local xz-bending translational mass on global `u_x`.
+- **Two-element model with node 0 fully fixed**: verifies free-DOF reduction (12 free DOFs for 2 free nodes x 6) and that the shared interior node accumulates contributions from both elements (axial, torsion, and both bending planes).
+- **Generic rotated element with non-axis-aligned beam and non-default refVector**: re-derives `M_g = T^T M_l T` using `BeamMath3D::buildTransformation3D` and `EulerBernoulli3D::computeMass` directly, and compares entry-by-entry with the assembled `BeamModel<EulerBernoulli3D>::assembleMass` output. This test specifically exercises the new `S * lambda * S` rotation block under a `lambda` that does not commute with `S`.
+
+`CMakeLists.txt` registers both new tests.
+
+### Local verification
+
+```
+$ ctest --test-dir build --output-on-failure
+...
+13/15 Test #13: test_eb2d_eb3d_crosscheck ........   Passed
+14/15 Test #14: test_eb3d_rigid_body .............   Passed
+15/15 Test #15: test_eb3d_mass ...................   Passed
+100% tests passed, 0 tests failed out of 15
+```
+
+All previous Batch 2A / 2B / 3 tests still pass. No assertion values in the existing 13 tests changed (the bug only affected geometries where `lambda` does not commute with `S`, none of which were exercised before).
+
+### Status
+
+Both Codex blockers are closed. Batch 3 ready for re-review.

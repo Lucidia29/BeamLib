@@ -249,13 +249,42 @@ Let $\bmath{\lambda} \in \mathbb{R}^{3 \times 3}$ be the matrix whose rows are t
 \]
 $\bmath{\lambda}$ is proper orthogonal ($\bmath{\lambda}^\mathsf{T}\bmath{\lambda} = \bmath{I}$, $\det\bmath{\lambda} = +1$) by construction (\S\ref{sec:local-frame}). For any 3-vector $\bmath{v}$, $\bmath{v}_\ell = \bmath{\lambda}\,\bmath{v}_g$.
 
-\subsection{Element-level transformation}
+\subsection{Element-level transformation}\label{sec:element-transformation}
 
-The $12\times 12$ element transformation $\bmath{T}$ is block-diagonal with four copies of $\bmath{\lambda}$, one per DOF triplet:
+The $12\times 12$ element transformation $\bmath{T}$ has a \emph{two-flavour} block-diagonal structure: translations use the plain orthogonal $\bmath{\lambda}$, but rotations use a sign-adapted form $\bmath{S}\bmath{\lambda}\bmath{S}$, where $\bmath{S} = \mathrm{diag}(1,-1,1)$.
+
+\paragraph{Why the rotation block needs $\bmath{S}\bmath{\lambda}\bmath{S}$ instead of $\bmath{\lambda}$.}\label{sec:slambdaSlambdaS}
+The BeamLib rotation storage convention is mixed (\S2.2):
 \[
-\bmath{T} = \mathrm{diag}\bigl(\bmath{\lambda},\bmath{\lambda},\bmath{\lambda},\bmath{\lambda}\bigr).
+\theta_x = +\Omega_x, \qquad \theta_y = -\Omega_y, \qquad \theta_z = +\Omega_z,
 \]
-The four blocks correspond to (uA-translations, $\theta_A$, uB-translations, $\theta_B$). Both translations and the small-rotation pseudovector are transformed by the same $\bmath{\lambda}$; this is exact for translations and consistent for the linear EB rotation DOFs (whose conventions are fixed in the local frame and propagated to the global frame by $\bmath{\lambda}^\mathsf{T}$).
+where $\bmath{\Omega}$ is the right-hand-rule physical rotation pseudovector. Equivalently, in any orthonormal frame,
+\[
+\bmath{\theta} = \bmath{S}\,\bmath{\Omega}, \qquad \bmath{S} = \mathrm{diag}(1,-1,1), \qquad \bmath{S}^2 = \bmath{I}.
+\]
+Because $\bmath{\Omega}$ is a true pseudovector, it transforms by $\bmath{\Omega}_\ell = \bmath{\lambda}\,\bmath{\Omega}_g$ under a proper-orthogonal change of frame. The BeamLib-stored rotation triplet therefore transforms as
+\[
+\bmath{\theta}_\ell = \bmath{S}\,\bmath{\Omega}_\ell = \bmath{S}\,\bmath{\lambda}\,\bmath{\Omega}_g = \bmath{S}\,\bmath{\lambda}\,\bmath{S}\,(\bmath{S}\,\bmath{\Omega}_g) = \bigl(\bmath{S}\,\bmath{\lambda}\,\bmath{S}\bigr)\,\bmath{\theta}_g.
+\]
+So the correct global-to-local mapping for the stored rotation DOFs is $\bmath{S}\bmath{\lambda}\bmath{S}$, not $\bmath{\lambda}$. The plain $\bmath{\lambda}$ block is only correct when $\bmath{\lambda}$ commutes with $\bmath{S}$, i.e.\ when $\lambda_{01}=\lambda_{10}=\lambda_{12}=\lambda_{21}=0$ (beams whose local frame keeps the $y$-axis aligned with the global $y$-axis, e.g.\ beams in the $xz$-plane with $\bmath{r}_{\text{ref}}=(0,1,0)$). For beams whose $\bmath{\lambda}$ mixes the $y$-axis with another axis, the commutator $[\bmath{\lambda},\bmath{S}]\ne\bmath{0}$ and using $\bmath{\lambda}$ produces a non-physical local rotation field and a non-zero residual under a true rigid-body motion.
+
+\paragraph{Element transformation matrix.}
+With $\bmath{\lambda}_{\text{rot}} \equiv \bmath{S}\bmath{\lambda}\bmath{S}$, the element transformation is
+\[
+\bmath{T} = \begin{bmatrix}
+\bmath{\lambda} & & & \\
+& \bmath{\lambda}_{\text{rot}} & & \\
+& & \bmath{\lambda} & \\
+& & & \bmath{\lambda}_{\text{rot}}
+\end{bmatrix},
+\]
+with the four diagonal blocks corresponding to (node-A translations, node-A rotations, node-B translations, node-B rotations). Element-wise, $\bmath{\lambda}_{\text{rot}}(i,j) = s_i\,\bmath{\lambda}(i,j)\,s_j$ with $\bmath{s} = (1,-1,1)$, equivalently a row-1 \emph{and} column-1 sign flip on $\bmath{\lambda}$.
+
+\paragraph{Internal consistency.}
+$\bmath{T}$ remains orthogonal because each diagonal block is orthogonal: $\bmath{\lambda}^\mathsf{T}\bmath{\lambda} = \bmath{I}$ and $(\bmath{S}\bmath{\lambda}\bmath{S})^\mathsf{T}(\bmath{S}\bmath{\lambda}\bmath{S}) = \bmath{S}\bmath{\lambda}^\mathsf{T}\bmath{S}\bmath{S}\bmath{\lambda}\bmath{S} = \bmath{S}\bmath{\lambda}^\mathsf{T}\bmath{\lambda}\bmath{S} = \bmath{S}^2 = \bmath{I}$. The strain-energy invariance and the rigid-body patch test both follow.
+
+\paragraph{Note on torsion ($\theta_x$).}
+Even though $\theta_x = \Omega_x$ (no structural sign flip on the $x$ component), the $\bmath{S}\bmath{\lambda}\bmath{S}$ adapter is still correct for the $\theta_x$ row/column: with $s_0 = +1$, the entries involving $\theta_x$ in $\bmath{\lambda}_{\text{rot}}$ pick up factors of $+1 \cdot s_j$. The net effect is that the $\theta_x$ component still satisfies $\theta_{x,\ell} = (\bmath{\lambda}\,\bmath{\Omega}_g)_x$ when expressed back in terms of $\bmath{\Omega}_g$ (verified by direct expansion of $\bmath{S}\bmath{\lambda}\bmath{S}\,\bmath{\theta}_g = \bmath{S}\bmath{\lambda}\bmath{\Omega}_g$).
 
 \subsection{Application convention}
 
@@ -344,7 +373,8 @@ $\hat{x}_\ell$            & \texttt{LocalFrame3D::Vx}            & beam axis $(\
 $\hat{y}_\ell$            & \texttt{LocalFrame3D::Vy}            & projection of \texttt{refVector} normal to $\hat{x}_\ell$ \\
 $\hat{z}_\ell$            & \texttt{LocalFrame3D::Vz}            & $\hat{x}_\ell \times \hat{y}_\ell$ \\
 $\bmath{\lambda}$         & \texttt{LocalFrame3D::lambda}        & rows = $(\hat{x}_\ell^\mathsf{T}, \hat{y}_\ell^\mathsf{T}, \hat{z}_\ell^\mathsf{T})$ \\
-$\bmath{T}$               & \texttt{buildTransformation3D}        & $\mathrm{diag}(\bmath{\lambda},\bmath{\lambda},\bmath{\lambda},\bmath{\lambda})$ \\
+$\bmath{T}$               & \texttt{buildTransformation3D}        & translation blocks use $\bmath{\lambda}$; rotation blocks use $\bmath{S}\bmath{\lambda}\bmath{S}$ (\S\ref{sec:slambdaSlambdaS}) \\
+$\bmath{S}$               & in-line in code                       & $\mathrm{diag}(1,-1,1)$ structural-vs-RH sign adapter for $\theta_y$ \\
 \bottomrule
 \caption{EB3D formula-to-C++ index mapping.}
 \end{longtable}
@@ -379,6 +409,12 @@ with all other DOFs zero. Root reaction in $\theta_x$ equals $-T_x$ (\texttt{tes
 
 For a beam aligned with $+\hat{x}$ under tip load $F_z$, EB2D ($I_z$ for $xz$ bending) and EB3D ($I_y$ for $xz$ bending) must agree exactly when $I_y^{3D} = I_z^{2D}$. The cross-check test compares tip $u_z$ and $\theta_y$ and confirms relative agreement below $10^{-9}$ (\texttt{test\_eb2d\_eb3d\_crosscheck.cpp}). The test sets the unused $I_z^{3D}$ to a different value as a guard against silent mis-indexing of the two bending planes.
 
+\subsection{Rigid-body patch test (transformation correctness)}
+
+\texttt{test\_eb3d\_rigid\_body.cpp} imposes a small physical rigid-body motion $\bmath{u} = \bmath{t} + \bmath{\Omega}\times\bmath{X}$ with $\bmath{\theta} = \bmath{S}\bmath{\Omega}$ on a 2-node element with arbitrary orientation and $\bmath{r}_{\text{ref}}$. The element internal residual norm must be at machine zero (rigid-body $\Rightarrow$ no strain $\Rightarrow$ no internal force).
+
+The geometry is deliberately chosen so $\bmath{\lambda}$ does not commute with $\bmath{S}$ (a beam in the $xy$-plane plus a generic $\bmath{r}_{\text{ref}}$): if the rotation transformation used the plain $\bmath{\lambda}$ block instead of $\bmath{S}\bmath{\lambda}\bmath{S}$, the test would produce a residual of $\mathcal{O}(\|EI\bmath{\Omega}/L\|)$ rather than zero. This is the test Codex Batch~3 review issue~1 requested, and it directly exercises \S\ref{sec:slambdaSlambdaS}.
+
 \subsection{Coordinate-transformation tests}
 
 Three subtests in \texttt{test\_eb3d\_transform.cpp}:
@@ -405,6 +441,10 @@ Torsion root reaction $\theta_x$ = $-T_x$                 & relative $10^{-9}$ \
 Unrelated DOF amplitudes (e.g., $u_x$ under $F_z$)        & absolute $10^{-14}$ \\
 Reaction at unloaded fixed DOF                            & absolute $10^{-9}$ \\
 EB3D vs.\ EB2D cross-check ($u_z$, $\theta_y$)            & relative $10^{-9}$ \\
+Rigid-body residual norm (arbitrary orientation)          & absolute $10^{-9}$ \\
+Mass matrix entries (local, single horizontal element)    & relative $10^{-12}$ \\
+Mass matrix entries (transformed, generic orientation)    & relative $10^{-10}$ \\
+Mass matrix symmetry                                       & absolute $10^{-12}$ \\
 Rotated-beam tip displacement (local frame round-trip)    & relative $10^{-9}$ \\
 Fallback frame orthogonality ($\|\bmath{\lambda}\bmath{\lambda}^\mathsf{T} - \bmath{I}\|$) & absolute $10^{-12}$ \\
 Fallback-frame tip deflection under transverse load        & relative $10^{-9}$ \\
@@ -423,7 +463,7 @@ Final NR residual (linear case)                           & $\le 10^{-7}$ absolu
     \item \textbf{Fallback determinism.} The fallback ladder is $(0,0,1) \to (0,1,0)$, fixed regardless of which $\bmath{r}_{\text{ref}}$ the user originally supplied. Tests assert specific frame components for both fallbacks.
     \item \textbf{Torsional rotary inertia is mandatory.} The polar inertia term $\rho I_x$ in the $\theta_x$ block is required for any modal or implicit-dynamic analysis. PROJECT\_SPEC \S3.4 and Codex Round~3 issue~2 both highlight this.
     \item \textbf{Bending rotary inertia is intentionally absent.} Diagonal entries on $\theta_y$, $\theta_z$ in the mass matrix come from translational kinetic energy through the Hermite shape functions, not from $\rho I$. Timoshenko (Batches~4/5) adds explicit rotary inertia.
-    \item \textbf{$\theta_y$ structural vs.\ right-hand-rule convention.} EB3D inherits EB2D's structural convention $\theta_y = \dd u_z / \dd x$, which is opposite in sign to the right-hand-rule rotation about $+\hat{y}_\ell$. The numerical Hermite block algebra is unchanged (the structural definition matches what the Hermite shape function $H_2(\xi)$ enforces).
+    \item \textbf{$\theta_y$ structural vs.\ right-hand-rule convention.} EB3D inherits EB2D's structural convention $\theta_y = \dd u_z / \dd x$, which is opposite in sign to the right-hand-rule rotation about $+\hat{y}_\ell$. The numerical Hermite block algebra is unchanged (the structural definition matches what the Hermite shape function $H_2(\xi)$ enforces), but the \emph{rotation transformation block} must be $\bmath{S}\bmath{\lambda}\bmath{S}$ rather than $\bmath{\lambda}$ to be consistent with this convention (\S\ref{sec:slambdaSlambdaS}). Using plain $\bmath{\lambda}$ silently passes any test where $\bmath{\lambda}$ commutes with $\bmath{S}$ (e.g.\ beams in the $xz$-plane with $\bmath{r}_{\text{ref}}=(0,1,0)$) but fails the 3D rigid-body patch test for general orientations.
     \item \textbf{Internal force postprocessing is partial.} \texttt{computeInternalForces} currently exposes only $\{N, V_z, M_y\}$; $V_y$, $M_z$, $T$ require an extension to the shared \texttt{ElementInternalForces} struct and are deferred to a later batch.
 \end{enumerate}
 
