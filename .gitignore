@@ -1,2 +1,20 @@
 /build/
 /third_party/
+
+# LaTeX build artifacts (rendered PDFs are kept; intermediates are not)
+docs/theory/*.aux
+docs/theory/*.log
+docs/theory/*.out
+docs/theory/*.toc
+docs/theory/*.lof
+docs/theory/*.lot
+docs/theory/*.fls
+docs/theory/*.fdb_latexmk
+docs/theory/*.synctex.gz
+docs/theory/missfont.log
+docs/tutorials/**/*.aux
+docs/tutorials/**/*.log
+docs/tutorials/**/*.out
+docs/tutorials/**/*.toc
+docs/tutorials/**/*.synctex.gz
+docs/tutorials/**/missfont.log

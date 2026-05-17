@@ -29,9 +29,58 @@ add_library(beamlib INTERFACE)
 target_include_directories(beamlib INTERFACE "${CMAKE_SOURCE_DIR}/include")
 target_link_libraries(beamlib INTERFACE Eigen3::Eigen)
 
+# Make CTest portable across shells (Codex Round 4, issue 2):
+# Windows + MinGW links against libgcc_s_seh-1.dll / libstdc++-6.dll. When
+# CTest spawns the test executables from a shell that does not have the
+# MinGW bin directory on PATH, Windows aborts with 0xc0000135 (missing
+# runtime). Copying the needed DLLs next to the test binaries puts them
+# in the same-directory step of the Windows DLL search order, so the
+# tests run regardless of the caller's PATH.
+if(WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    get_filename_component(BEAMLIB_MINGW_BIN "${CMAKE_CXX_COMPILER}" DIRECTORY)
+    foreach(_dll libstdc++-6.dll libgcc_s_seh-1.dll libwinpthread-1.dll)
+        if(EXISTS "${BEAMLIB_MINGW_BIN}/${_dll}")
+            file(COPY "${BEAMLIB_MINGW_BIN}/${_dll}"
+                 DESTINATION "${CMAKE_BINARY_DIR}")
+        endif()
+    endforeach()
+endif()
+
 # Tests
 enable_testing()
 
 add_executable(test_compile_check tests/test_compile_check.cpp)
 target_link_libraries(test_compile_check beamlib)
 add_test(NAME test_compile_check COMMAND test_compile_check)
+
+add_executable(test_eb2d_cantilever tests/test_eb2d_cantilever.cpp)
+target_link_libraries(test_eb2d_cantilever beamlib)
+add_test(NAME test_eb2d_cantilever COMMAND test_eb2d_cantilever)
+
+add_executable(test_eb2d_patch tests/test_eb2d_patch.cpp)
+target_link_libraries(test_eb2d_patch beamlib)
+add_test(NAME test_eb2d_patch COMMAND test_eb2d_patch)
+
+add_executable(test_eb2d_moment tests/test_eb2d_moment.cpp)
+target_link_libraries(test_eb2d_moment beamlib)
+add_test(NAME test_eb2d_moment COMMAND test_eb2d_moment)
+
+add_executable(test_eb2d_postprocess tests/test_eb2d_postprocess.cpp)
+target_link_libraries(test_eb2d_postprocess beamlib)
+add_test(NAME test_eb2d_postprocess COMMAND test_eb2d_postprocess)
+
+add_executable(test_eb2d_simply_supported tests/test_eb2d_simply_supported.cpp)
+target_link_libraries(test_eb2d_simply_supported beamlib)
+add_test(NAME test_eb2d_simply_supported COMMAND test_eb2d_simply_supported)
+
+add_executable(test_eb2d_rotated_beam tests/test_eb2d_rotated_beam.cpp)
+target_link_libraries(test_eb2d_rotated_beam beamlib)
+add_test(NAME test_eb2d_rotated_beam COMMAND test_eb2d_rotated_beam)
+
+add_executable(test_eb2d_settlement tests/test_eb2d_settlement.cpp)
+target_link_libraries(test_eb2d_settlement beamlib)
+add_test(NAME test_eb2d_settlement COMMAND test_eb2d_settlement)
+
+add_executable(test_eb2d_mass tests/test_eb2d_mass.cpp)
+target_link_libraries(test_eb2d_mass beamlib)
+add_test(NAME test_eb2d_mass COMMAND test_eb2d_mass)
